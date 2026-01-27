@@ -11,6 +11,7 @@ const { corsMiddleware } = require('shared/middlewares/cors');
 const { apiLimiter, redirectLimiter } = require('shared/middlewares/rateLimit');
 const { isValidUrl, isSafeRedirectUrl, validateRequiredFields, validationError } = require('shared/utils/validation');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
+const { createEventPublisher, QUEUES } = require('shared/events');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -29,10 +30,9 @@ let rabbitChannel = null;
 
 connectRabbitMQ().then((channel) => {
   rabbitChannel = channel;
+  channel.assertQueue(QUEUES.EVENTS);
 
-  const sendEvent = (type, payload) => {
-    channel.sendToQueue('events', Buffer.from(JSON.stringify({ type, payload })));
-  };
+  const eventPublisher = createEventPublisher(channel);
 
   app.get('/urls', authenticateJWT, apiLimiter, async (req, res) => {
     const {
@@ -68,7 +68,7 @@ connectRabbitMQ().then((channel) => {
         data: { originalUrl, shortId, userId },
       });
 
-      sendEvent('url_created', newUrl);
+      eventPublisher.publishUrlCreated(newUrl);
 
       res.json({ shortUrl: `${baseUrl}/${shortId}` });
     } catch (error) {
@@ -147,7 +147,7 @@ connectRabbitMQ().then((channel) => {
           data: { clicks: { increment: 1 } },
         });
 
-        sendEvent('url_clicked', { shortId, originalUrl: url.originalUrl });
+        eventPublisher.publishUrlClicked({ shortId, originalUrl: url.originalUrl });
 
         res.redirect(url.originalUrl);
       } else {

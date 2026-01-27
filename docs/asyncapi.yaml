@@ -1,0 +1,246 @@
+asyncapi: '2.6.0'
+info:
+  title: BearLink Event API
+  version: '1.0.0'
+  description: |
+    Event-driven communication specification for BearLink URL shortening service.
+
+    This specification documents the asynchronous messaging patterns used between
+    BearLink microservices via RabbitMQ.
+  contact:
+    name: BearLink Team
+  license:
+    name: MIT
+
+servers:
+  development:
+    url: amqp://localhost:5672
+    protocol: amqp
+    description: Local development RabbitMQ server
+  production:
+    url: ${RABBITMQ_URL}
+    protocol: amqp
+    description: Production RabbitMQ server
+
+defaultContentType: application/json
+
+channels:
+  events:
+    description: Domain events channel for cross-service communication
+    publish:
+      operationId: publishEvent
+      summary: Publish domain events
+      message:
+        oneOf:
+          - $ref: '#/components/messages/UserRegistered'
+          - $ref: '#/components/messages/UrlCreated'
+          - $ref: '#/components/messages/UrlClicked'
+    subscribe:
+      operationId: consumeEvent
+      summary: Consume domain events
+      message:
+        oneOf:
+          - $ref: '#/components/messages/UserRegistered'
+          - $ref: '#/components/messages/UrlCreated'
+          - $ref: '#/components/messages/UrlClicked'
+
+  email_notifications:
+    description: Email notification channel for sending emails via notification service
+    publish:
+      operationId: publishEmailNotification
+      summary: Queue an email for delivery
+      message:
+        $ref: '#/components/messages/EmailNotification'
+    subscribe:
+      operationId: consumeEmailNotification
+      summary: Process email delivery requests
+      message:
+        $ref: '#/components/messages/EmailNotification'
+
+components:
+  messages:
+    UserRegistered:
+      name: UserRegistered
+      title: User Registered Event
+      summary: Published when a new user completes registration
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UserRegisteredEvent'
+
+    UrlCreated:
+      name: UrlCreated
+      title: URL Created Event
+      summary: Published when a user creates a new shortened URL
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UrlCreatedEvent'
+
+    UrlClicked:
+      name: UrlClicked
+      title: URL Clicked Event
+      summary: Published when a shortened URL is accessed/clicked
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UrlClickedEvent'
+
+    EmailNotification:
+      name: EmailNotification
+      title: Email Notification
+      summary: Request to send an email via the notification service
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/EmailNotificationPayload'
+
+  schemas:
+    UserRegisteredEvent:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          const: user_registered
+          description: Event type identifier
+        payload:
+          $ref: '#/components/schemas/UserRegisteredPayload'
+
+    UserRegisteredPayload:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - role
+        - createdAt
+      properties:
+        id:
+          type: integer
+          description: Unique user identifier
+          example: 1
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: user@example.com
+        name:
+          type: string
+          description: User's display name
+          example: John Doe
+        role:
+          type: string
+          enum: [user, admin]
+          description: User's role in the system
+          example: user
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp of user creation
+          example: '2024-01-15T10:30:00.000Z'
+
+    UrlCreatedEvent:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          const: url_created
+          description: Event type identifier
+        payload:
+          $ref: '#/components/schemas/UrlCreatedPayload'
+
+    UrlCreatedPayload:
+      type: object
+      required:
+        - id
+        - originalUrl
+        - shortId
+        - clicks
+        - createdAt
+        - userId
+      properties:
+        id:
+          type: integer
+          description: Unique URL record identifier
+          example: 42
+        originalUrl:
+          type: string
+          format: uri
+          description: The original long URL
+          example: https://example.com/very/long/path
+        shortId:
+          type: string
+          description: Generated short identifier (10 characters)
+          example: abc123XYZ0
+        clicks:
+          type: integer
+          minimum: 0
+          description: Number of times the URL has been clicked
+          example: 0
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp of URL creation
+          example: '2024-01-15T10:30:00.000Z'
+        userId:
+          type: integer
+          description: ID of the user who created the URL
+          example: 1
+
+    UrlClickedEvent:
+      type: object
+      required:
+        - type
+        - payload
+      properties:
+        type:
+          type: string
+          const: url_clicked
+          description: Event type identifier
+        payload:
+          $ref: '#/components/schemas/UrlClickedPayload'
+
+    UrlClickedPayload:
+      type: object
+      required:
+        - shortId
+        - originalUrl
+      properties:
+        shortId:
+          type: string
+          description: The short ID that was clicked
+          example: abc123XYZ0
+        originalUrl:
+          type: string
+          format: uri
+          description: The original URL being redirected to
+          example: https://example.com/very/long/path
+
+    EmailNotificationPayload:
+      type: object
+      required:
+        - to
+        - subject
+        - text
+      properties:
+        to:
+          type: string
+          format: email
+          description: Recipient email address
+          example: user@example.com
+        subject:
+          type: string
+          description: Email subject line
+          example: Welcome to BearLink!
+        text:
+          type: string
+          description: Plain text email body
+          example: |
+            Hello John,
+
+            Thank you for registering at BearLink.
+
+            Best Regards,
+            BearLink Team

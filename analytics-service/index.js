@@ -2,13 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const morgan = require('morgan');
 const { PrismaClient } = require('@prisma/client');
-const { connectRabbitMQ, getChannel } = require('shared/utils/rabbitmq');
+const { connectRabbitMQ } = require('shared/utils/rabbitmq');
 const logger = require('shared/utils/logger');
 const { corsMiddleware } = require('shared/middlewares/cors');
 const { apiLimiter } = require('shared/middlewares/rateLimit');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
-
-const RETRY_INTERVAL = 5000; // 5 seconds
+const { consumeEvents } = require('shared/events');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -30,30 +29,11 @@ const handleEvent = async (type, payload) => {
   }
 };
 
-const consuemEvents = (channel) => {
-  try {
-    channel.assertQueue('events');
-    channel.consume('events', async (msg) => {
-      try {
-        const event = JSON.parse(msg.content.toString());
-        await handleEvent(event.type, event.payload);
-        channel.ack(msg);
-      } catch (error) {
-        logger.error(`Failed to handle event:`, error);
-        channel.nack(msg);
-      }
-    });
-  } catch (error) {
-    logger.error('Failed to consume events:', error.message);
-    setTimeout(consuemEvents, RETRY_INTERVAL);
-  }
-}
-
 let rabbitChannel = null;
 
-connectRabbitMQ().then((channel) => {
+connectRabbitMQ().then(async (channel) => {
   rabbitChannel = channel;
-  consuemEvents(channel);
+  await consumeEvents(channel, handleEvent);
 
   app.get('/events', apiLimiter, async (req, res) => {
     try {

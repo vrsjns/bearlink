@@ -12,6 +12,7 @@ const { corsMiddleware } = require('shared/middlewares/cors');
 const { authLimiter, apiLimiter } = require('shared/middlewares/rateLimit');
 const { isValidEmail, isValidPassword, validateRequiredFields, validationError } = require('shared/utils/validation');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
+const { createEventPublisher, QUEUES } = require('shared/events');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -37,16 +38,10 @@ let rabbitChannel = null;
 
 connectRabbitMQ().then((channel) => {
   rabbitChannel = channel;
-  channel.assertQueue('events');
-  channel.assertQueue('email_notifications');
+  channel.assertQueue(QUEUES.EVENTS);
+  channel.assertQueue(QUEUES.EMAIL_NOTIFICATIONS);
 
-  const sendEvent = (type, payload) => {
-    channel.sendToQueue('events', Buffer.from(JSON.stringify({ type, payload })));
-  };
-
-  const sendEmail = (payload) => {
-    channel.sendToQueue('email_notifications', Buffer.from(JSON.stringify(payload)));
-  };
+  const eventPublisher = createEventPublisher(channel);
 
   app.post('/register', authLimiter, async (req, res) => {
     const { email, password, name } = req.body;
@@ -75,8 +70,8 @@ connectRabbitMQ().then((channel) => {
 
       logger.info(`User registered: ${user?.email}`, user);
 
-      sendEvent('user_registered', sanitizeUser(user));
-      sendEmail({
+      eventPublisher.publishUserRegistered(sanitizeUser(user));
+      eventPublisher.publishEmailNotification({
         to: email,
         subject: 'Welcome to BearLink!',
         text: `Hello ${name},\n\nThank you for registering at BearLink.\n\nBest Regards,\nBearLink Team`,

@@ -60,6 +60,35 @@ Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (10
 - `utils/logger.js` - Winston logger (console + file)
 - `utils/rabbitmq.js` - RabbitMQ connection with retry logic
 - `middlewares/auth.js` - JWT authentication (`authenticateJWT`, `isAdmin`, `isSelfOrAdmin`)
+- `events/` - Event publishing and consuming helpers (see below)
+
+### Event-Driven Communication
+
+Services communicate via RabbitMQ using the shared events module. See `docs/asyncapi.yaml` for the full specification and `docs/events.md` for detailed documentation.
+
+**Publishing events:**
+```javascript
+const { createEventPublisher, QUEUES } = require('shared/events');
+
+// After connecting to RabbitMQ
+channel.assertQueue(QUEUES.EVENTS);
+const eventPublisher = createEventPublisher(channel);
+
+eventPublisher.publishUserRegistered(payload);
+eventPublisher.publishUrlCreated(payload);
+eventPublisher.publishUrlClicked(payload);
+eventPublisher.publishEmailNotification({ to, subject, text });
+```
+
+**Consuming events:**
+```javascript
+const { consumeEvents, consumeEmailNotifications } = require('shared/events');
+
+await consumeEvents(channel, async (type, payload) => { /* handle */ });
+await consumeEmailNotifications(channel, async ({ to, subject, text }) => { /* send */ });
+```
+
+**Constants:** Use `QUEUES.EVENTS`, `QUEUES.EMAIL_NOTIFICATIONS`, and `EVENT_TYPES.*` instead of hardcoding strings.
 
 ## Key Patterns
 

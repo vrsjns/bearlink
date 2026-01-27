@@ -6,8 +6,8 @@ const { connectRabbitMQ } = require('shared/utils/rabbitmq');
 const logger = require('shared/utils/logger');
 const { corsMiddleware } = require('shared/middlewares/cors');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
+const { consumeEmailNotifications } = require('shared/events');
 
-const RETRY_INTERVAL = 5000;
 
 const app = express();
 app.use(corsMiddleware);
@@ -41,30 +41,11 @@ const sendEmail = async ({ to, subject, text }) => {
     }
 };
 
-const consuemEmailNotifications = (channel) => {
-    try {
-        channel.assertQueue('email_notifications');
-        channel.consume('email_notifications', async (msg) => {
-            try {
-                const emailContent = JSON.parse(msg.content.toString());
-                await sendEmail(emailContent);
-                channel.ack(msg);
-            } catch (error) {
-                logger.error(`Failed to send email:`, { error: error.message });
-                channel.nack(msg);
-            }
-        });
-    } catch (error) {
-        logger.error('Failed to consume eamil_notification:', error.message);
-        setTimeout(consuemEmailNotifications, RETRY_INTERVAL);
-    }
-};
-
 let rabbitChannel = null;
 
-connectRabbitMQ().then((channel) => {
+connectRabbitMQ().then(async (channel) => {
     rabbitChannel = channel;
-    consuemEmailNotifications(channel);
+    await consumeEmailNotifications(channel, sendEmail);
 
     // Readiness check with RabbitMQ and SMTP verification
     app.get('/ready', createReadinessHandler({

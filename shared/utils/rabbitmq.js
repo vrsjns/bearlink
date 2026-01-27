@@ -1,12 +1,6 @@
 const amqp = require('amqplib');
 const logger = require('./logger');
 
-const QUEUES = {
-    EVENT: 'events',
-    TASKS: 'tasks',
-    STATUS_UPDATE: 'status_update'
-};
-
 let channel = null;
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://localhost';
