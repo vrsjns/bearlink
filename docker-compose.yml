@@ -1,3 +1,7 @@
+# Run services as current user to avoid permission issues with mounted volumes
+x-user: &current-user
+  user: "${UID:-1000}:${GID:-1000}"
+
 services:
   rabbitmq:
     image: rabbitmq:3-management
@@ -6,6 +10,7 @@ services:
       - "15672:15672"
 
   auth-service:
+    <<: *current-user
     build:
       context: ./
       dockerfile: ./auth-service/Dockerfile
@@ -27,6 +32,7 @@ services:
       - RABBITMQ_URL=amqp://rabbitmq
 
   url-service:
+    <<: *current-user
     build:
       context: ./
       dockerfile: ./url-service/Dockerfile
@@ -47,6 +53,7 @@ services:
       - RABBITMQ_URL=amqp://rabbitmq
 
   analytics-service:
+    <<: *current-user
     build:
       context: ./
       dockerfile: ./analytics-service/Dockerfile
@@ -67,6 +74,7 @@ services:
       - RABBITMQ_URL=amqp://rabbitmq
 
   notification-service:
+    <<: *current-user
     build:
       context: ./
       dockerfile: ./notification-service/Dockerfile
@@ -89,6 +97,7 @@ services:
       - RABBITMQ_URL=amqp://rabbitmq
 
   web-ui:
+    <<: *current-user
     build: ./web-ui
     volumes:
       - ./web-ui:/app
