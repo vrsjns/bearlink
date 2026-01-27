@@ -1,0 +1,29 @@
+{
+    "name": "mono",
+    "private": true,
+    "workspaces": [
+        "analytics-service",
+        "auth-service",
+        "notification-service",
+        "url-service",
+        "shared"
+    ],
+    "scripts": {
+        "bootstrap": "lerna bootstrap",
+        "start": "lerna run start",
+        "test": "lerna run test"
+    },
+    "devDependencies": {
+        "lerna": "^8.1.8"
+    },
+    "dependencies": {
+        "amqplib": "0.10.4",
+        "cors": "^2.8.5",
+        "dotenv": "16.4.5",
+        "express": "^4.19.2",
+        "express-rate-limit": "^7.1.5",
+        "morgan": "^1.10.0",
+        "validator": "^13.11.0",
+        "winston": "^3.14.1"
+    }
+}
