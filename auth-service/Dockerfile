@@ -8,14 +8,11 @@ RUN apt install -y postgresql-client
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json into the container
-COPY ../package*.json ./
-
-# Install dependencies, including development dependencies
-RUN npm install
-
-# Copy the rest of the application code
+# Copy all source files (workspaces need to be present for npm install)
 COPY ../ ./
+
+# Install dependencies (including workspace dependencies like prisma)
+RUN npm install
 
 # Install nodemon globally for auto-reloading
 RUN npm install -g nodemon
@@ -23,8 +20,8 @@ RUN npm install -g nodemon
 # Navigate to the specific service
 WORKDIR /app/auth-service
 
-# Generate Prisma client
-RUN npx prisma generate
+# Generate Prisma client using workspace-installed version
+RUN npm exec -- prisma generate
 
 # Expose the port on which the service runs
 EXPOSE 4000
