@@ -4,14 +4,11 @@ FROM node:20-alpine
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json into the container
-COPY ../package*.json ./
-
-# Install dependencies, including development dependencies
-RUN npm install
-
-# Copy the rest of the application code
+# Copy all source files (workspaces need to be present for npm install)
 COPY ../ ./
+
+# Install dependencies (including workspace dependencies)
+RUN npm install
 
 # Install nodemon globally for auto-reloading
 RUN npm install -g nodemon
