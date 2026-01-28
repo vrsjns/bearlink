@@ -1,19 +1,23 @@
 require('dotenv').config();
 const express = require('express');
-const morgan = require('morgan');
 const { PrismaClient } = require('@prisma/client');
 const { connectRabbitMQ } = require('shared/utils/rabbitmq');
-const logger = require('shared/utils/logger');
+const { createLogger } = require('shared/utils/logger');
 const { corsMiddleware } = require('shared/middlewares/cors');
 const { apiLimiter } = require('shared/middlewares/rateLimit');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
 const { consumeEvents } = require('shared/events');
+const { createCorrelationIdMiddleware } = require('shared/middlewares/correlationId');
+const { createRequestLogger } = require('shared/middlewares/requestLogger');
 
+const logger = createLogger('analytics-service');
 const prisma = new PrismaClient();
 const app = express();
+
 app.use(corsMiddleware);
 app.use(express.json());
-app.use(morgan('tiny'));
+app.use(createCorrelationIdMiddleware('analytics-service'));
+app.use(createRequestLogger('analytics-service'));
 
 // Health check endpoint
 app.get('/health', healthHandler);
@@ -23,9 +27,9 @@ const handleEvent = async (type, payload) => {
     await prisma.event.create({
       data: { type, payload },
     });
-    logger.info(`Event of type ${type} stored successfully`);
+    logger.info('Event stored successfully', { eventType: type });
   } catch (error) {
-    logger.error(`Failed to store event of type ${type}:`, error);
+    logger.error('Failed to store event', { eventType: type, error: error.message });
   }
 };
 
@@ -33,7 +37,7 @@ let rabbitChannel = null;
 
 connectRabbitMQ().then(async (channel) => {
   rabbitChannel = channel;
-  await consumeEvents(channel, handleEvent);
+  await consumeEvents(channel, handleEvent, { serviceName: 'analytics-service' });
 
   app.get('/events', apiLimiter, async (req, res) => {
     try {

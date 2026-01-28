@@ -1,18 +1,21 @@
 require('dotenv').config();
 const express = require('express');
-const morgan = require('morgan');
 const nodemailer = require('nodemailer');
 const { connectRabbitMQ } = require('shared/utils/rabbitmq');
-const logger = require('shared/utils/logger');
+const { createLogger } = require('shared/utils/logger');
 const { corsMiddleware } = require('shared/middlewares/cors');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
 const { consumeEmailNotifications } = require('shared/events');
+const { createCorrelationIdMiddleware } = require('shared/middlewares/correlationId');
+const { createRequestLogger } = require('shared/middlewares/requestLogger');
 
+const logger = createLogger('notification-service');
 
 const app = express();
 app.use(corsMiddleware);
 app.use(express.json());
-app.use(morgan('tiny'));
+app.use(createCorrelationIdMiddleware('notification-service'));
+app.use(createRequestLogger('notification-service'));
 
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -34,9 +37,9 @@ const sendEmail = async ({ to, subject, text }) => {
             subject,
             text,
         });
-        logger.info(`Email ${subject} sent to ${to}`);
+        logger.info('Email sent', { subject, to });
     } catch (error) {
-        logger.error('Error sending email:', { error: error.message });
+        logger.error('Error sending email', { error: error.message, to, subject });
         throw (error);
     }
 };
@@ -45,7 +48,7 @@ let rabbitChannel = null;
 
 connectRabbitMQ().then(async (channel) => {
     rabbitChannel = channel;
-    await consumeEmailNotifications(channel, sendEmail);
+    await consumeEmailNotifications(channel, sendEmail, { serviceName: 'notification-service' });
 
     // Readiness check with RabbitMQ and SMTP verification
     app.get('/ready', createReadinessHandler({

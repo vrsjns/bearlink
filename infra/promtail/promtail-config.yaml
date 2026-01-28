@@ -1,0 +1,59 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Scrape Docker container logs
+  - job_name: containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: containerlogs
+          __path__: /var/lib/docker/containers/*/*log
+
+    pipeline_stages:
+      # Parse Docker JSON log format
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            timestamp: time
+
+      # Extract container labels
+      - json:
+          expressions:
+            service: attrs.com.docker.compose.service
+          source: output
+
+      # Parse JSON logs from our services
+      - json:
+          expressions:
+            level: level
+            message: message
+            correlationId: correlationId
+            serviceName: service
+            userId: userId
+          source: output
+
+      # Set labels from extracted fields
+      - labels:
+          stream:
+          service:
+          level:
+          correlationId:
+
+      # Use the log message as output
+      - output:
+          source: output
+
+      # Parse timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano

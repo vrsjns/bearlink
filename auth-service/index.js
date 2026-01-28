@@ -1,24 +1,28 @@
 require('dotenv').config();
 const express = require('express');
-const morgan = require('morgan');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 
 const { connectRabbitMQ } = require('shared/utils/rabbitmq');
-const logger = require('shared/utils/logger');
+const { createLogger } = require('shared/utils/logger');
 const { authenticateJWT, isAdmin, isSelfOrAdmin } = require('shared/middlewares/auth');
 const { corsMiddleware } = require('shared/middlewares/cors');
 const { authLimiter, apiLimiter } = require('shared/middlewares/rateLimit');
 const { isValidEmail, isValidPassword, validateRequiredFields, validationError } = require('shared/utils/validation');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
 const { createEventPublisher, QUEUES } = require('shared/events');
+const { createCorrelationIdMiddleware } = require('shared/middlewares/correlationId');
+const { createRequestLogger } = require('shared/middlewares/requestLogger');
 
+const logger = createLogger('auth-service');
 const prisma = new PrismaClient();
 const app = express();
+
 app.use(corsMiddleware);
 app.use(express.json());
-app.use(morgan('tiny'));
+app.use(createCorrelationIdMiddleware('auth-service'));
+app.use(createRequestLogger('auth-service'));
 
 const generateToken = (user) => jwt.sign(
   { id: user.id, email: user.email, name: user.name, role: user.role },
@@ -68,7 +72,7 @@ connectRabbitMQ().then((channel) => {
         data: { email, password: hashedPassword, name },
       });
 
-      logger.info(`User registered: ${user?.email}`, user);
+      logger.info('User registered', { email: user?.email, userId: user?.id });
 
       eventPublisher.publishUserRegistered(sanitizeUser(user));
       eventPublisher.publishEmailNotification({
@@ -79,7 +83,7 @@ connectRabbitMQ().then((channel) => {
 
       res.json({ token: generateToken(user) });
     } catch (error) {
-      logger.error('Error registering user:', error);
+      logger.error('Error registering user', { error: error.message });
       res.status(400).json({ error: 'User registration failed.' });
     }
   });
@@ -93,7 +97,7 @@ connectRabbitMQ().then((channel) => {
       }
       res.json({ token: generateToken(user) });
     } catch (error) {
-      logger.error('Error logging in user:', error);
+      logger.error('Error logging in user', { error: error.message });
       res.status(400).json({ error: 'User login failed.' });
     }
   });
@@ -134,7 +138,7 @@ connectRabbitMQ().then((channel) => {
   process.on('SIGTERM', gracefulShutdown(server));
   process.on('SIGINT', gracefulShutdown(server));
 }).catch(error => {
-  logger.error('Error connecting to RabbitMQ:', error);
+  logger.error('Error connecting to RabbitMQ', { error: error.message });
   process.exit(1);
 });
 

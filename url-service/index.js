@@ -1,24 +1,27 @@
 require('dotenv').config();
 const express = require('express');
-const morgan = require('morgan');
 const { nanoid } = require('nanoid');
 const { PrismaClient } = require('@prisma/client');
 
 const { connectRabbitMQ } = require('shared/utils/rabbitmq');
-const logger = require('shared/utils/logger');
+const { createLogger } = require('shared/utils/logger');
 const { authenticateJWT } = require('shared/middlewares/auth');
 const { corsMiddleware } = require('shared/middlewares/cors');
 const { apiLimiter, redirectLimiter } = require('shared/middlewares/rateLimit');
 const { isValidUrl, isSafeRedirectUrl, validateRequiredFields, validationError } = require('shared/utils/validation');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
 const { createEventPublisher, QUEUES } = require('shared/events');
+const { createCorrelationIdMiddleware } = require('shared/middlewares/correlationId');
+const { createRequestLogger } = require('shared/middlewares/requestLogger');
 
+const logger = createLogger('url-service');
 const prisma = new PrismaClient();
 const app = express();
 
 app.use(corsMiddleware);
 app.use(express.json());
-app.use(morgan('tiny'));
+app.use(createCorrelationIdMiddleware('url-service'));
+app.use(createRequestLogger('url-service'));
 
 const port = process.env.PORT || 5000;
 const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
@@ -72,7 +75,7 @@ connectRabbitMQ().then((channel) => {
 
       res.json({ shortUrl: `${baseUrl}/${shortId}` });
     } catch (error) {
-      logger.error('Error shortening URL:', error);
+      logger.error('Error shortening URL', { error: error.message });
       res.status(500).json({ error: 'Failed to shorten URL' });
     }
   });
@@ -89,12 +92,12 @@ connectRabbitMQ().then((channel) => {
     const urlId = Number.parseInt(id, 10);
 
     if (!Number.isInteger(urlId)) {
-      logger.error(`Error updating URL: invalid URL ID: ${urlId}`);
+      logger.error('Error updating URL: invalid URL ID', { urlId });
       return res.status(400).json({ error: 'Invalid URL ID.' });
     }
 
     if (!originalURL) {
-      logger.error('Error updating URL: missing original URL.');
+      logger.error('Error updating URL: missing original URL');
       return res.status(400).json({ error: 'Missing original URL.' });
     }
 
@@ -116,7 +119,7 @@ connectRabbitMQ().then((channel) => {
     const urlId = Number.parseInt(id, 10);
 
     if (!Number.isInteger(urlId)) {
-      logger.error(`Error updating URL: invalid URL ID: ${urlId}`);
+      logger.error('Error updating URL: invalid URL ID', { urlId });
       return res.status(400).json({ error: 'Invalid URL ID.' });
     }
 
@@ -124,7 +127,7 @@ connectRabbitMQ().then((channel) => {
       await prisma.uRL.delete({ where: { id: urlId, userId } });
       res.sendStatus(204);
     } catch (error) {
-      logger.error('Error deleting URL:', error);
+      logger.error('Error deleting URL', { error: error.message });
       res.status(500).json({ error: 'Failed to delete URL' });
     }
   });
@@ -138,7 +141,7 @@ connectRabbitMQ().then((channel) => {
       if (url) {
         // Validate URL is safe for redirect (prevents open redirect attacks)
         if (!isSafeRedirectUrl(url.originalUrl)) {
-          logger.warn(`Blocked unsafe redirect attempt: ${url.originalUrl}`);
+          logger.warn('Blocked unsafe redirect attempt', { originalUrl: url.originalUrl });
           return res.status(400).json({ error: 'URL is not safe for redirect' });
         }
 
@@ -154,7 +157,7 @@ connectRabbitMQ().then((channel) => {
         res.status(404).json({ error: 'URL not found' });
       }
     } catch (error) {
-      logger.error('Error fetching URL:', error);
+      logger.error('Error fetching URL', { error: error.message });
       res.status(500).json({ error: 'Failed to redirect' });
     }
   });

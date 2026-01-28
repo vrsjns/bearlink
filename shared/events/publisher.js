@@ -1,4 +1,5 @@
 const { QUEUES, EVENT_TYPES } = require('./constants');
+const { getContext } = require('../utils/context');
 
 /**
  * Creates an event publisher with typed methods for publishing events
@@ -7,6 +8,26 @@ const { QUEUES, EVENT_TYPES } = require('./constants');
  */
 const createEventPublisher = (channel) => {
   /**
+   * Gets message options including correlation headers from context
+   * @returns {Object} AMQP message options
+   */
+  const getMessageOptions = () => {
+    const context = getContext();
+    const headers = {};
+
+    if (context) {
+      if (context.correlationId) {
+        headers['x-correlation-id'] = context.correlationId;
+      }
+      if (context.serviceName) {
+        headers['x-source-service'] = context.serviceName;
+      }
+    }
+
+    return Object.keys(headers).length > 0 ? { headers } : undefined;
+  };
+
+  /**
    * Publishes an event to the events queue
    * @param {string} type - Event type
    * @param {Object} payload - Event payload
@@ -14,7 +35,8 @@ const createEventPublisher = (channel) => {
   const publishEvent = (type, payload) => {
     channel.sendToQueue(
       QUEUES.EVENTS,
-      Buffer.from(JSON.stringify({ type, payload }))
+      Buffer.from(JSON.stringify({ type, payload })),
+      getMessageOptions()
     );
   };
 
@@ -49,7 +71,8 @@ const createEventPublisher = (channel) => {
   const publishEmailNotification = (payload) => {
     channel.sendToQueue(
       QUEUES.EMAIL_NOTIFICATIONS,
-      Buffer.from(JSON.stringify(payload))
+      Buffer.from(JSON.stringify(payload)),
+      getMessageOptions()
     );
   };
 
