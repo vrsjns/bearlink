@@ -1,13 +1,19 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { login } from '@/services/api/auth';
+import { login, isAuthenticated } from '@/services/api/auth';
 
 const Login = () => {
     const [email, setEmail] = useState<string>('');
     const [password, setPassword] = useState<string>('');
     const router = useRouter();
+
+    useEffect(() => {
+        if (isAuthenticated()) {
+            router.push('/');
+        }
+    }, [router]);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();

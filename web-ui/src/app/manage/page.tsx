@@ -18,19 +18,28 @@ const ManageURLs = () => {
     const [urls, setUrls] = useState<URL[]>([]);
     const [editingUrl, setEditingUrl] = useState<number | null>(null);
     const [newOriginalUrl, setNewOriginalUrl] = useState<string>('');
+    const [isLoading, setIsLoading] = useState<boolean>(true);
     const router = useRouter();
 
     useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            router.push('/login');
+            return;
+        }
+
         const fetchUrls = async () => {
             try {
                 const response = await getURLs();
                 setUrls(response.data);
             } catch (error) {
                 console.error('Error fetching URLs:', error);
+            } finally {
+                setIsLoading(false);
             }
         };
         fetchUrls();
-    }, []);
+    }, [router]);
 
     const handleEdit = (id: number, originalUrl: string) => {
         setEditingUrl(id);
@@ -55,6 +64,14 @@ const ManageURLs = () => {
             console.error('Error deleting URL:', error);
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-100">
+                <div className="text-gray-500">Loading...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">

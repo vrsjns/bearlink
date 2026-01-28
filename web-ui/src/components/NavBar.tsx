@@ -1,17 +1,24 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { logout, isAuthenticated } from '../services/api/auth';
 
 const Navbar = () => {
     const router = useRouter();
+    const pathname = usePathname();
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+    useEffect(() => {
+        setIsLoggedIn(isAuthenticated());
+    }, [pathname]);
 
     const handleLogout = () => {
         logout();
         router.push('/login');
     };
 
-    if (!isAuthenticated()) {
+    if (!isLoggedIn) {
         return null;
     }
 
