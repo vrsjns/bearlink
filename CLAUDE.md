@@ -64,31 +64,16 @@ Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (10
 
 ### Event-Driven Communication
 
-Services communicate via RabbitMQ using the shared events module. See `docs/asyncapi.yaml` for the full specification and `docs/events.md` for detailed documentation.
+Services communicate via RabbitMQ using the shared events module (`shared/events/`).
 
-**Publishing events:**
-```javascript
-const { createEventPublisher, QUEUES } = require('shared/events');
+| Service | Role | Events |
+|---------|------|--------|
+| auth-service | Publisher | `user_registered`, email notifications |
+| url-service | Publisher | `url_created`, `url_clicked` |
+| analytics-service | Consumer | All domain events |
+| notification-service | Consumer | Email notifications |
 
-// After connecting to RabbitMQ
-channel.assertQueue(QUEUES.EVENTS);
-const eventPublisher = createEventPublisher(channel);
-
-eventPublisher.publishUserRegistered(payload);
-eventPublisher.publishUrlCreated(payload);
-eventPublisher.publishUrlClicked(payload);
-eventPublisher.publishEmailNotification({ to, subject, text });
-```
-
-**Consuming events:**
-```javascript
-const { consumeEvents, consumeEmailNotifications } = require('shared/events');
-
-await consumeEvents(channel, async (type, payload) => { /* handle */ });
-await consumeEmailNotifications(channel, async ({ to, subject, text }) => { /* send */ });
-```
-
-**Constants:** Use `QUEUES.EVENTS`, `QUEUES.EMAIL_NOTIFICATIONS`, and `EVENT_TYPES.*` instead of hardcoding strings.
+See each service's `CLAUDE.md` for implementation details, or `docs/asyncapi.yaml` for the full specification.
 
 ## Key Patterns
 
