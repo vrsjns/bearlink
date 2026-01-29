@@ -6,6 +6,30 @@
         "-y",
         "@modelcontextprotocol/server-memory"
       ]
+    },
+    "auth-db": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://postgres:password@localhost:5432/auth_service"
+      ]
+    },
+    "url-db": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://postgres:password@localhost:5432/url_service"
+      ]
+    },
+    "analytics-db": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://postgres:password@localhost:5432/analytics_service"
+      ]
     }
   }
 }
