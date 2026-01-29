@@ -121,6 +121,30 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /profile:
+    get:
+      tags: [auth]
+      summary: Get current user profile
+      description: Returns the authenticated user's profile data
+      operationId: getCurrentUserProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /users/{userId}:
     get:
       tags: [auth]
@@ -149,6 +173,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+    put:
+      tags: [auth]
+      summary: Update user profile
+      description: |
+        Updates user profile (self or admin only).
+        Email changes require current password verification.
+        Returns a new JWT token when name or email changes.
+      operationId: updateUserProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateProfileResponse'
+        '400':
+          description: Validation error (invalid name or email format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient permissions or invalid password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
     delete:
       tags: [auth]
       summary: Delete user
@@ -167,6 +243,63 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}/password:
+    post:
+      tags: [auth]
+      summary: Change user password
+      description: |
+        Changes user password (self or admin only).
+        Requires current password verification.
+        Has stricter rate limiting (5 requests per 15 minutes).
+      operationId: changeUserPassword
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Password changed successfully.
+        '400':
+          description: Validation error (weak password, same as current)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Invalid current password or insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests (rate limited)
           content:
             application/json:
               schema:
@@ -486,6 +619,51 @@ components:
           type: string
           format: date-time
           example: '2024-01-15T10:30:00.000Z'
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: New display name
+          example: Jane Doe
+        email:
+          type: string
+          format: email
+          description: New email address (requires currentPassword)
+          example: jane@example.com
+        currentPassword:
+          type: string
+          description: Required when changing email
+          example: CurrentPassword123
+
+    UpdateProfileResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          description: New JWT token (issued when name or email changes)
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - currentPassword
+        - newPassword
+      properties:
+        currentPassword:
+          type: string
+          description: Current password for verification
+          example: OldPassword123
+        newPassword:
+          type: string
+          minLength: 8
+          description: New password (min 8 chars, uppercase, lowercase, number)
+          example: NewPassword456
 
     CreateUrlRequest:
       type: object

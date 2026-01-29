@@ -51,20 +51,87 @@ export const resetPassword = async (token: string, password: string) => {
     }
 };
 
-export const fetchUserProfile = async () => {
+export interface UserProfile {
+    id: number;
+    email: string;
+    name: string;
+    role: string;
+    createdAt: string;
+}
+
+export interface UpdateProfileData {
+    name?: string;
+    email?: string;
+    currentPassword?: string;
+}
+
+export interface ChangePasswordData {
+    currentPassword: string;
+    newPassword: string;
+}
+
+export const fetchUserProfile = async (): Promise<UserProfile> => {
     if (!isAuthenticated()) {
         throw new Error('Not authenticated');
     }
 
     try {
-        return {
-            email: 'user@example.com',  // Placeholder for actual email value
-            name: 'John Doe' // Placeholder for actual name value
-        };
         const response = await authApiClient.get('/profile');
         return response.data;
     } catch (error) {
         console.error(error);
         throw new Error('Failed to fetch profile');
+    }
+};
+
+export const updateUserProfile = async (userId: number, data: UpdateProfileData): Promise<UserProfile> => {
+    if (!isAuthenticated()) {
+        throw new Error('Not authenticated');
+    }
+
+    try {
+        const response = await authApiClient.put(`/users/${userId}`, data);
+        // Update localStorage token if a new one was returned
+        if (response.data.token) {
+            localStorage.setItem('token', response.data.token);
+        }
+        return response.data.user;
+    } catch (error: unknown) {
+        console.error(error);
+        if (error && typeof error === 'object' && 'response' in error) {
+            const axiosError = error as { response?: { data?: { error?: string }, status?: number } };
+            if (axiosError.response?.data?.error) {
+                throw new Error(axiosError.response.data.error);
+            }
+            if (axiosError.response?.status === 403) {
+                throw new Error('Invalid password or insufficient permissions');
+            }
+            if (axiosError.response?.status === 409) {
+                throw new Error('Email already in use');
+            }
+        }
+        throw new Error('Failed to update profile');
+    }
+};
+
+export const changePassword = async (userId: number, data: ChangePasswordData): Promise<void> => {
+    if (!isAuthenticated()) {
+        throw new Error('Not authenticated');
+    }
+
+    try {
+        await authApiClient.post(`/users/${userId}/password`, data);
+    } catch (error: unknown) {
+        console.error(error);
+        if (error && typeof error === 'object' && 'response' in error) {
+            const axiosError = error as { response?: { data?: { error?: string }, status?: number } };
+            if (axiosError.response?.data?.error) {
+                throw new Error(axiosError.response.data.error);
+            }
+            if (axiosError.response?.status === 403) {
+                throw new Error('Invalid current password');
+            }
+        }
+        throw new Error('Failed to change password');
     }
 };

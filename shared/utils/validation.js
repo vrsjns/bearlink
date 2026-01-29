@@ -89,11 +89,25 @@ const validationError = (res, message, details = null) => {
   return res.status(400).json(response);
 };
 
+/**
+ * Validates name: 1-100 characters after trim
+ * @param {string} name - Name to validate
+ * @returns {boolean} - True if valid name
+ */
+const isValidName = (name) => {
+  if (!name || typeof name !== 'string') {
+    return false;
+  }
+  const trimmed = name.trim();
+  return trimmed.length >= 1 && trimmed.length <= 100;
+};
+
 module.exports = {
   isValidEmail,
   isValidPassword,
   isValidUrl,
   isSafeRedirectUrl,
+  isValidName,
   validateRequiredFields,
   validationError,
 };
