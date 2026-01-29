@@ -2,13 +2,7 @@
 
 Event storage service that consumes and persists all domain events.
 
-## Endpoints
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/events` | - | List all stored events |
-| GET | `/health` | - | Health check |
-| GET | `/ready` | - | Readiness check |
+**Port:** 6000 | **API Docs:** See [OpenAPI spec](../docs/openapi.yaml) (tag: `analytics`)
 
 ## Event Consumption
 

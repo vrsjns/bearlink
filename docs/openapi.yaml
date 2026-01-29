@@ -1,0 +1,601 @@
+openapi: 3.0.3
+info:
+  title: BearLink API
+  description: |
+    REST API specification for BearLink URL shortening service.
+
+    For async event documentation, see [AsyncAPI specification](./asyncapi.yaml).
+  version: 1.0.0
+  contact:
+    name: BearLink Team
+
+servers:
+  - url: http://localhost:{port}
+    description: Development server
+    variables:
+      port:
+        enum:
+          - '4000'
+          - '5000'
+          - '6000'
+          - '7000'
+        default: '5000'
+
+tags:
+  - name: auth
+    description: Authentication and user management (port 4000)
+  - name: urls
+    description: URL shortening operations (port 5000)
+  - name: analytics
+    description: Event analytics (port 6000)
+  - name: notification
+    description: Notification service (port 7000)
+  - name: health
+    description: Health and readiness checks
+
+paths:
+  # Auth Service Endpoints
+  /register:
+    post:
+      tags: [auth]
+      summary: Register new user
+      description: Creates a new user account and returns a JWT token
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Validation error (missing fields, invalid email, weak password)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /login:
+    post:
+      tags: [auth]
+      summary: User login
+      description: Authenticates user and returns a JWT token
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Missing email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users:
+    get:
+      tags: [auth]
+      summary: List all users
+      description: Returns all registered users (admin only)
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /users/{userId}:
+    get:
+      tags: [auth]
+      summary: Get user by ID
+      description: Returns a specific user (self or admin only)
+      operationId: getUserById
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [auth]
+      summary: Delete user
+      description: Permanently deletes a user account (admin only)
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        '204':
+          description: User deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # URL Service Endpoints
+  /urls:
+    get:
+      tags: [urls]
+      summary: List user's URLs
+      description: Returns all shortened URLs created by the authenticated user
+      operationId: listUrls
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of URLs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Url'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [urls]
+      summary: Create shortened URL
+      description: Creates a new shortened URL for the authenticated user
+      operationId: createUrl
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUrlRequest'
+      responses:
+        '201':
+          description: URL created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUrlResponse'
+        '400':
+          description: Invalid URL format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /urls/{id}:
+    put:
+      tags: [urls]
+      summary: Update URL
+      description: Updates the original URL for an existing shortened URL
+      operationId: updateUrl
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/urlId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUrlRequest'
+      responses:
+        '200':
+          description: URL updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Url'
+        '400':
+          description: Invalid URL format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not authorized to update this URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: URL not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [urls]
+      summary: Delete URL
+      description: Deletes a shortened URL
+      operationId: deleteUrl
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/urlId'
+      responses:
+        '204':
+          description: URL deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not authorized to delete this URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: URL not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /{shortId}:
+    get:
+      tags: [urls]
+      summary: Redirect to original URL
+      description: |
+        Redirects to the original URL associated with the short ID.
+        Increments the click counter and publishes a url_clicked event.
+      operationId: redirectUrl
+      parameters:
+        - name: shortId
+          in: path
+          required: true
+          description: The 10-character short identifier
+          schema:
+            type: string
+            minLength: 10
+            maxLength: 10
+            example: abc123xyz9
+      responses:
+        '302':
+          description: Redirect to original URL
+          headers:
+            Location:
+              description: The original URL
+              schema:
+                type: string
+                format: uri
+        '404':
+          description: Short URL not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Analytics Service Endpoints
+  /events:
+    get:
+      tags: [analytics]
+      summary: List all events
+      description: Returns all stored domain events
+      operationId: listEvents
+      responses:
+        '200':
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+
+  # Health Endpoints (all services)
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      description: Returns 200 if the service is running
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /ready:
+    get:
+      tags: [health]
+      summary: Readiness check
+      description: |
+        Returns 200 if the service is ready to accept requests.
+        Checks database and RabbitMQ connectivity (varies by service).
+      operationId: readinessCheck
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /login or /register
+
+  parameters:
+    userId:
+      name: userId
+      in: path
+      required: true
+      description: User ID
+      schema:
+        type: integer
+        example: 1
+
+    urlId:
+      name: id
+      in: path
+      required: true
+      description: URL record ID
+      schema:
+        type: integer
+        example: 1
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          minLength: 6
+          example: securepassword123
+        name:
+          type: string
+          example: John Doe
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          example: securepassword123
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT token for authentication
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        name:
+          type: string
+          example: John Doe
+        role:
+          type: string
+          enum: [user, admin]
+          example: user
+        createdAt:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00.000Z'
+
+    CreateUrlRequest:
+      type: object
+      required:
+        - originalUrl
+      properties:
+        originalUrl:
+          type: string
+          format: uri
+          description: The URL to shorten (must be http or https)
+          example: https://example.com/very/long/path
+
+    UpdateUrlRequest:
+      type: object
+      required:
+        - originalUrl
+      properties:
+        originalUrl:
+          type: string
+          format: uri
+          description: The new destination URL
+          example: https://example.com/updated/path
+
+    CreateUrlResponse:
+      type: object
+      properties:
+        shortUrl:
+          type: string
+          format: uri
+          description: The full shortened URL
+          example: http://localhost:5000/abc123xyz9
+
+    Url:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        originalUrl:
+          type: string
+          format: uri
+          example: https://example.com/very/long/path
+        shortId:
+          type: string
+          minLength: 10
+          maxLength: 10
+          example: abc123xyz9
+        clicks:
+          type: integer
+          minimum: 0
+          example: 42
+        userId:
+          type: integer
+          example: 1
+        createdAt:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00.000Z'
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        type:
+          type: string
+          enum: [user_registered, url_created, url_clicked]
+          example: url_clicked
+        payload:
+          type: object
+          description: Event-specific data (see AsyncAPI spec for schemas)
+        createdAt:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00.000Z'
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          example: ok
+
+    ReadyResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+          example: ok
+        checks:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [ok, error]
+            rabbitmq:
+              type: string
+              enum: [ok, error]
+            smtp:
+              type: string
+              enum: [ok, error]
+              description: Only present in notification-service
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: Invalid credentials

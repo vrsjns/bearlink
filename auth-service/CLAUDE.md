@@ -2,17 +2,7 @@
 
 User authentication service handling registration, login, and user management.
 
-## Endpoints
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/register` | - | Register new user |
-| POST | `/login` | - | Login and get JWT |
-| GET | `/users` | Admin | List all users |
-| GET | `/users/:userId` | Self/Admin | Get user by ID |
-| DELETE | `/users/:userId` | Admin | Delete user |
-| GET | `/health` | - | Health check |
-| GET | `/ready` | - | Readiness check |
+**Port:** 4000 | **API Docs:** See [OpenAPI spec](../docs/openapi.yaml) (tag: `auth`)
 
 ## Event Publishing
 

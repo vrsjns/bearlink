@@ -73,7 +73,12 @@ Services communicate via RabbitMQ using the shared events module (`shared/events
 | analytics-service | Consumer | All domain events |
 | notification-service | Consumer | Email notifications |
 
-See each service's `CLAUDE.md` for implementation details, or `docs/asyncapi.yaml` for the full specification.
+See each service's `CLAUDE.md` for implementation details.
+
+### API Documentation
+
+- **REST API:** `docs/openapi.yaml` - OpenAPI 3.0 specification for all service endpoints
+- **Async Events:** `docs/asyncapi.yaml` - AsyncAPI specification for RabbitMQ events
 
 ## Key Patterns
 

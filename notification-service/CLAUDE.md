@@ -2,12 +2,7 @@
 
 Email delivery service that consumes email notification requests.
 
-## Endpoints
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/health` | - | Health check |
-| GET | `/ready` | - | Readiness check (RabbitMQ + SMTP) |
+**Port:** 7000 | **API Docs:** See [OpenAPI spec](../docs/openapi.yaml) (tag: `notification`)
 
 ## Event Consumption
 

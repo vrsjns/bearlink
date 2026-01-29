@@ -2,17 +2,7 @@
 
 URL shortening service handling link creation, management, and redirection.
 
-## Endpoints
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/urls` | JWT | List user's URLs |
-| POST | `/urls` | JWT | Create shortened URL |
-| PUT | `/urls/:id` | JWT | Update URL |
-| DELETE | `/urls/:id` | JWT | Delete URL |
-| GET | `/:shortId` | - | Redirect to original URL |
-| GET | `/health` | - | Health check |
-| GET | `/ready` | - | Readiness check |
+**Port:** 5000 | **API Docs:** See [OpenAPI spec](../docs/openapi.yaml) (tag: `urls`)
 
 ## Event Publishing
 
