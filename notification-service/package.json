@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "nodemon index.js",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -15,5 +16,10 @@
     "express": "^4.19.2",
     "nodemailer": "^6.9.14",
     "winston": "^3.14.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4",
+    "vitest": "^2.1.0",
+    "supertest": "^7.0.0"
   }
 }
