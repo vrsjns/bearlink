@@ -4,6 +4,45 @@ URL shortening service handling link creation, management, and redirection.
 
 **Port:** 5000 | **API Docs:** See [OpenAPI spec](../docs/openapi.yaml) (tag: `urls`)
 
+## Project Structure
+
+```
+url-service/
+├── index.js              # Entry point: DB/RabbitMQ init, server start, shutdown
+├── app.js                # Express app factory: middleware setup, route mounting
+├── routes/
+│   ├── index.js          # Combine routers, export single router factory
+│   ├── urls.routes.js    # /urls CRUD endpoints
+│   └── redirect.routes.js # /:shortId redirect endpoint
+├── controllers/
+│   ├── urls.controller.js    # list, create, update, delete handlers
+│   └── redirect.controller.js # redirect handler
+├── services/
+│   └── url.service.js    # generateShortId helper
+└── CLAUDE.md
+```
+
+## Dependency Injection Pattern
+
+The service uses factory functions with dependency injection:
+
+```javascript
+// Entry point creates dependencies
+const prisma = new PrismaClient();
+const eventPublisher = createEventPublisher(channel);
+const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
+
+// App factory receives dependencies
+const app = createApp({ prisma, eventPublisher, baseUrl });
+
+// Routes receive dependencies and pass to controllers
+const createRoutes = ({ prisma, eventPublisher, baseUrl }) => {
+  router.use(createUrlsRoutes({ prisma, eventPublisher, baseUrl }));
+  router.use(createRedirectRoutes({ prisma, eventPublisher }));
+  return router;
+};
+```
+
 ## Event Publishing
 
 This service **publishes** events to RabbitMQ. It does not consume events.
