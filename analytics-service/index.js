@@ -1,54 +1,28 @@
 require('dotenv').config();
-const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+
 const { connectRabbitMQ } = require('shared/utils/rabbitmq');
 const { createLogger } = require('shared/utils/logger');
-const { corsMiddleware } = require('shared/middlewares/cors');
-const { apiLimiter } = require('shared/middlewares/rateLimit');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
 const { consumeEvents } = require('shared/events');
-const { createCorrelationIdMiddleware } = require('shared/middlewares/correlationId');
-const { createRequestLogger } = require('shared/middlewares/requestLogger');
+const { createApp } = require('./app');
+const { createEventHandler } = require('./services/event.service');
 
 const logger = createLogger('analytics-service');
 const prisma = new PrismaClient();
-const app = express();
-
-app.use(corsMiddleware);
-app.use(express.json());
-app.use(createCorrelationIdMiddleware('analytics-service'));
-app.use(createRequestLogger('analytics-service'));
-
-// Health check endpoint
-app.get('/health', healthHandler);
-
-const handleEvent = async (type, payload) => {
-  try {
-    await prisma.event.create({
-      data: { type, payload },
-    });
-    logger.info('Event stored successfully', { eventType: type });
-  } catch (error) {
-    logger.error('Failed to store event', { eventType: type, error: error.message });
-  }
-};
 
 let rabbitChannel = null;
 
 connectRabbitMQ().then(async (channel) => {
   rabbitChannel = channel;
+
+  const handleEvent = createEventHandler({ prisma });
   await consumeEvents(channel, handleEvent, { serviceName: 'analytics-service' });
 
-  app.get('/events', apiLimiter, async (req, res) => {
-    try {
-      const events = await prisma.event.findMany();
-      res.json(events);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch events' });
-    }
-  });
+  const app = createApp({ prisma });
 
-  // Readiness check with database and RabbitMQ verification
+  // Health check endpoints (need access to rabbitChannel)
+  app.get('/health', healthHandler);
   app.get('/ready', createReadinessHandler({
     database: async () => { await prisma.$queryRaw`SELECT 1`; },
     rabbitmq: async () => { if (!rabbitChannel) throw new Error('RabbitMQ not connected'); },
@@ -60,6 +34,9 @@ connectRabbitMQ().then(async (channel) => {
 
   process.on('SIGTERM', gracefulShutdown(server));
   process.on('SIGINT', gracefulShutdown(server));
+}).catch(error => {
+  logger.error('Error connecting to RabbitMQ', { error: error.message });
+  process.exit(1);
 });
 
 const gracefulShutdown = server => async () => {
@@ -80,4 +57,4 @@ const gracefulShutdown = server => async () => {
     logger.error('Could not close connections in time, forcefully shutting down');
     process.exit(1);
   }, 5000);
-}
+};
