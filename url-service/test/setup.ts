@@ -7,33 +7,6 @@ process.env.RABBITMQ_URL = 'amqp://localhost';
 process.env.PORT = '5001';
 process.env.BASE_URL = 'http://localhost:5001';
 
-// Mock Prisma
-vi.mock('@prisma/client', () => ({
-  PrismaClient: vi.fn().mockImplementation(() => ({
-    uRL: {
-      create: vi.fn(),
-      findUnique: vi.fn(),
-      findMany: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-    },
-    $disconnect: vi.fn(),
-    $queryRaw: vi.fn(),
-  })),
-}));
-
-// Mock RabbitMQ
-vi.mock('shared/utils/rabbitmq', () => ({
-  connectRabbitMQ: vi.fn().mockResolvedValue({
-    assertQueue: vi.fn(),
-    sendToQueue: vi.fn(),
-    consume: vi.fn(),
-    ack: vi.fn(),
-    nack: vi.fn(),
-  }),
-  getChannel: vi.fn(),
-}));
-
 // Mock logger
 vi.mock('shared/utils/logger', () => ({
   createLogger: vi.fn().mockReturnValue({
@@ -44,24 +17,12 @@ vi.mock('shared/utils/logger', () => ({
   }),
 }));
 
-// Mock event publisher
-vi.mock('shared/events', () => ({
-  createEventPublisher: vi.fn().mockReturnValue({
-    publishUserRegistered: vi.fn(),
-    publishUrlCreated: vi.fn(),
-    publishUrlClicked: vi.fn(),
-    publishEmailNotification: vi.fn(),
-    publishEvent: vi.fn(),
-  }),
-  QUEUES: {
-    EVENTS: 'events',
-    EMAIL_NOTIFICATIONS: 'email_notifications',
-  },
-}));
-
 // Mock correlation ID middleware
 vi.mock('shared/middlewares/correlationId', () => ({
-  createCorrelationIdMiddleware: vi.fn().mockReturnValue((req: any, res: any, next: any) => next()),
+  createCorrelationIdMiddleware: vi.fn().mockReturnValue((req: any, res: any, next: any) => {
+    req.correlationId = 'test-correlation-id';
+    next();
+  }),
 }));
 
 // Mock request logger
@@ -81,7 +42,12 @@ vi.mock('shared/middlewares/rateLimit', () => ({
   redirectLimiter: (req: any, res: any, next: any) => next(),
 }));
 
-// Mock nanoid
+// Mock nanoid with controllable return value
+let mockShortId = 'abc1234567';
+export const setMockShortId = (id: string) => {
+  mockShortId = id;
+};
+
 vi.mock('nanoid', () => ({
-  nanoid: vi.fn().mockReturnValue('abc1234567'),
+  nanoid: vi.fn(() => mockShortId),
 }));
