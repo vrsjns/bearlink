@@ -10,8 +10,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['index.js', 'src/**/*.{js,ts}'],
-      exclude: ['**/node_modules/**', '**/coverage/**'],
+      include: ['app.js', 'controllers/**/*.js', 'services/**/*.js', 'routes/**/*.js'],
+      exclude: ['**/node_modules/**', '**/coverage/**', '**/test/**'],
     },
     mockReset: true,
     restoreMocks: true,

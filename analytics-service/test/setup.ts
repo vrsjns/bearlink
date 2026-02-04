@@ -62,3 +62,10 @@ vi.mock('shared/middlewares/requestLogger', () => ({
 vi.mock('shared/middlewares/cors', () => ({
   corsMiddleware: (req: any, res: any, next: any) => next(),
 }));
+
+// Mock rate limiters
+vi.mock('shared/middlewares/rateLimit', () => ({
+  authLimiter: (req: any, res: any, next: any) => next(),
+  apiLimiter: (req: any, res: any, next: any) => next(),
+  redirectLimiter: (req: any, res: any, next: any) => next(),
+}));
