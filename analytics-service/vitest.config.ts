@@ -11,7 +11,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['index.js', 'src/**/*.{js,ts}'],
-      exclude: ['**/node_modules/**'],
+      exclude: ['**/node_modules/**', '**/coverage/**'],
     },
     mockReset: true,
     restoreMocks: true,

@@ -9,7 +9,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['utils/**/*.js', 'middlewares/**/*.js', 'events/**/*.js'],
-      exclude: ['**/node_modules/**', '**/*.test.js'],
+      exclude: ['**/node_modules/**', '**/coverage/**', '**/*.test.js'],
     },
   },
 });

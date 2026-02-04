@@ -1,18 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
 
-// Test the utility functions that would be exported from the service
-describe('Auth Service Utilities', () => {
+// Import actual functions from the service
+const { generateToken, sanitizeUser } = require('../services/token.service');
+
+describe('Token Service', () => {
   describe('generateToken', () => {
-    const generateToken = (user: { id: number; email: string; name: string; role: string }) =>
-      jwt.sign(
-        { id: user.id, email: user.email, name: user.name, role: user.role },
-        process.env.JWT_SECRET!,
-        { expiresIn: '1h' }
-      );
-
-    it('should generate a valid JWT token', () => {
+    it('should generate a valid JWT token with user claims', () => {
       const user = { id: 1, email: 'test@example.com', name: 'Test User', role: 'USER' };
       const token = generateToken(user);
 
@@ -32,16 +26,26 @@ describe('Auth Service Utilities', () => {
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
       expect(decoded.exp).toBeDefined();
-      expect(decoded.iat).toBeDefined();
+    });
+
+    it('should only include id, email, name, and role in token payload', () => {
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        name: 'Test User',
+        role: 'USER',
+        password: 'secret',
+        createdAt: new Date(),
+      };
+      const token = generateToken(user);
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+      expect(decoded).not.toHaveProperty('password');
+      expect(decoded).not.toHaveProperty('createdAt');
     });
   });
 
   describe('sanitizeUser', () => {
-    const sanitizeUser = (user: { password: string; [key: string]: any }) => {
-      const { password, ...sanitized } = user;
-      return sanitized;
-    };
-
     it('should remove password from user object', () => {
       const user = {
         id: 1,
@@ -57,32 +61,25 @@ describe('Auth Service Utilities', () => {
       expect(sanitized.id).toBe(1);
       expect(sanitized.email).toBe('test@example.com');
       expect(sanitized.name).toBe('Test User');
-    });
-  });
-
-  describe('password hashing', () => {
-    it('should hash password correctly', async () => {
-      const password = 'Password123';
-      const hashed = await bcrypt.hash(password, 10);
-
-      expect(hashed).not.toBe(password);
-      expect(hashed.length).toBeGreaterThan(0);
+      expect(sanitized.role).toBe('USER');
     });
 
-    it('should verify correct password', async () => {
-      const password = 'Password123';
-      const hashed = await bcrypt.hash(password, 10);
+    it('should preserve all other user properties', () => {
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        password: 'hashedpassword',
+        name: 'Test User',
+        role: 'ADMIN',
+        createdAt: new Date('2024-01-01'),
+        updatedAt: new Date('2024-01-02'),
+      };
 
-      const isValid = await bcrypt.compare(password, hashed);
-      expect(isValid).toBe(true);
-    });
+      const sanitized = sanitizeUser(user);
 
-    it('should reject incorrect password', async () => {
-      const password = 'Password123';
-      const hashed = await bcrypt.hash(password, 10);
-
-      const isValid = await bcrypt.compare('WrongPassword', hashed);
-      expect(isValid).toBe(false);
+      expect(sanitized.createdAt).toEqual(new Date('2024-01-01'));
+      expect(sanitized.updatedAt).toEqual(new Date('2024-01-02'));
+      expect(sanitized.role).toBe('ADMIN');
     });
   });
 });

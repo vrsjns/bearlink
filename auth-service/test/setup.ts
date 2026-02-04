@@ -1,10 +1,25 @@
 import { vi } from 'vitest';
+import Module from 'module';
 
 // Mock environment variables
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_auth';
 process.env.RABBITMQ_URL = 'amqp://localhost';
 process.env.PORT = '4001';
+
+// Intercept require at the Node.js module level
+// This handles CommonJS modules that vitest mocking can't intercept
+const originalRequire = Module.prototype.require;
+const passThrough = (_req: any, _res: any, next: any) => next();
+
+// @ts-ignore
+Module.prototype.require = function (id: string) {
+  if (id === 'express-rate-limit') {
+    // Return a function that creates pass-through middleware
+    return () => passThrough;
+  }
+  return originalRequire.apply(this, arguments as any);
+};
 
 // Mock Prisma
 vi.mock('@prisma/client', () => ({

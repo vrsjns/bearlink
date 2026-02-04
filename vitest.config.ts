@@ -26,6 +26,7 @@ export default defineConfig({
         // Build artifacts and dependencies
         '**/node_modules/**',
         '**/dist/**',
+        '**/coverage/**',
         '**/prisma/**',
         '**/.next/**',
       ],
