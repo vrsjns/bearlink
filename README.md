@@ -9,15 +9,15 @@ A URL shortening platform built as a Node.js/TypeScript microservices monorepo. 
                         │   web-ui    │  :3000  (Next.js)
                         └──────┬──────┘
                                │ REST
-           ┌───────────────────┼───────────────────┐
-           ▼                   ▼                   ▼
-   ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐
-   │ auth-service │   │  url-service │   │analytics-service │
-   │    :4000     │   │    :5000     │   │      :6000       │
-   └──────┬───────┘   └──────┬───────┘   └────────┬─────────┘
-          │                  │                    │
-          │   RabbitMQ (events / email_notifications)
-          └──────────────────┼────────────────────┘
+           ┌───────────────────┼───────────────────┬──────────────────┐
+           ▼                   ▼                   ▼                  ▼
+   ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐  ┌─────────────────┐
+   │ auth-service │   │  url-service │   │analytics-service │  │ preview-service │
+   │    :4000     │   │    :5000     │   │      :6000       │  │     :8000       │
+   └──────┬───────┘   └──────┬───────┘   └────────┬─────────┘  └────────┬────────┘
+          │                  │                    │                     │
+          │        RabbitMQ (events / email_notifications / preview)    │
+          └──────────────────┼────────────────────┴─────────────────────┘
                              │
                     ┌────────┴────────┐
                     │                 │
@@ -34,6 +34,7 @@ A URL shortening platform built as a Node.js/TypeScript microservices monorepo. 
 | url-service          | 5000 | url_service       | URL shortening, redirection, click counts |
 | analytics-service    | 6000 | analytics_service | Event log storage and retrieval           |
 | notification-service | 7000 | —                 | Email delivery via SMTP                   |
+| preview-service      | 8000 | —                 | Link metadata scraping (Python/FastAPI)   |
 | web-ui               | 3000 | —                 | Next.js frontend                          |
 
 Supporting infrastructure: PostgreSQL, RabbitMQ, MailHog (dev email), Loki + Promtail + Grafana (observability).
@@ -97,6 +98,15 @@ Events stored: `user_registered`, `url_created`, `url_clicked`.
 
 No public REST API. Consumes the `email_notifications` queue and sends emails via SMTP. In development, MailHog captures all outgoing mail at http://localhost:8025.
 
+### preview-service (port 8000)
+
+Python/FastAPI service that scrapes link metadata asynchronously via RabbitMQ.
+
+- `GET /health` — health check
+- `GET /preview?url=<url>` — fetch cached metadata for a URL
+
+When url-service creates a short link it publishes a `preview_requested` event. preview-service scrapes the target URL (title, description, OG image) using BeautifulSoup and publishes a `preview_ready` event with the result.
+
 ### web-ui (port 3000)
 
 Next.js 14 frontend. Pages: login, register, dashboard (URL management), profile, password reset.
@@ -109,6 +119,8 @@ Services communicate asynchronously via RabbitMQ with two queues:
 |-----------------------|---------------------------|----------------------|--------------------------------|
 | `events`              | auth-service, url-service | analytics-service    | Domain events for audit log    |
 | `email_notifications` | auth-service              | notification-service | Email delivery payloads        |
+| `preview_requested`   | url-service               | preview-service      | Async metadata scrape trigger  |
+| `preview_ready`       | preview-service           | url-service          | Scraped metadata result        |
 
 RabbitMQ connections retry up to 30 times (2 s intervals) before giving up. See `docs/asyncapi.yaml` for full event schemas.
 
@@ -122,6 +134,12 @@ RabbitMQ connections retry up to 30 times (2 s intervals) before giving up. See 
 - Winston structured logging
 - Vitest + Supertest for testing
 
+**preview-service**
+- Python 3.11 + FastAPI
+- BeautifulSoup4 for HTML scraping
+- aio-pika for async RabbitMQ integration
+- pytest for testing
+
 **Frontend**
 - Next.js 14 (App Router) + React 18
 - TypeScript + Tailwind CSS
@@ -132,6 +150,11 @@ RabbitMQ connections retry up to 30 times (2 s intervals) before giving up. See 
 - RabbitMQ 3 with management UI
 - MailHog for development email
 - Loki + Promtail + Grafana for log aggregation and dashboards
+
+**Deployment**
+- Kubernetes manifests in `k8s/` — 27 YAML files for k3s
+- Kustomize overlay for image registry configuration
+- See [bearlink-infra](https://github.com/vrsjns/bearlink-infra) for Terraform + Ansible cluster provisioning
 
 ## Local Development (without Docker)
 
@@ -222,9 +245,11 @@ bearlink/
 ├── url-service/           # URL shortening & redirection
 ├── analytics-service/     # Event log
 ├── notification-service/  # Email delivery
+├── preview-service/       # Link metadata scraping (Python/FastAPI)
 ├── web-ui/                # Next.js frontend
 ├── shared/                # Shared utilities, middleware, event helpers
 ├── infra/                 # Docker infrastructure configs (Loki, Grafana, DB init)
+├── k8s/                   # Kubernetes manifests for k3s deployment
 ├── docs/                  # OpenAPI and AsyncAPI specs
 ├── docker-compose.yml
 └── lerna.json
