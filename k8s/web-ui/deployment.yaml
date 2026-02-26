@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: web-ui
-          image: ghcr.io/<owner>/web-ui:latest
+          image: ghcr.io/vrsjns/web-ui:latest
           ports:
             - containerPort: 3000
           env:

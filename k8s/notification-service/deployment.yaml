@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: notification-service
-          image: ghcr.io/<owner>/notification-service:latest
+          image: ghcr.io/vrsjns/notification-service:latest
           ports:
             - containerPort: 7000
           env:
