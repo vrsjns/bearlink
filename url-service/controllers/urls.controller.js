@@ -12,7 +12,7 @@ const logger = createLogger('url-service');
  * @param {string} deps.baseUrl - Base URL for short links
  * @returns {Object} Controller methods
  */
-const createUrlsController = ({ prisma, eventPublisher, baseUrl, previewClient }) => {
+const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }) => {
   const listUrls = async (req, res) => {
     const { user: { id: userId } } = req;
     const urls = await prisma.uRL.findMany({ where: { userId } });
@@ -43,27 +43,11 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, previewClient }
 
       eventPublisher.publishUrlCreated(newUrl);
 
-      res.json({ shortUrl: `${baseUrl}/${shortId}` });
-
-      // Fetch preview metadata in background (non-blocking)
-      if (previewClient) {
-        setImmediate(async () => {
-          try {
-            const meta = await previewClient.fetchPreview(originalUrl);
-            await prisma.uRL.update({
-              where: { id: newUrl.id },
-              data: {
-                previewTitle: meta.title,
-                previewDescription: meta.description,
-                previewImageUrl: meta.image,
-                previewFetchedAt: new Date(),
-              },
-            });
-          } catch (err) {
-            logger.warn('Preview fetch failed', { url: originalUrl, error: err.message });
-          }
-        });
+      if (publishPreviewJob) {
+        publishPreviewJob({ urlId: newUrl.id, originalUrl });
       }
+
+      res.json({ shortUrl: `${baseUrl}/${shortId}` });
     } catch (error) {
       logger.error('Error shortening URL', { error: error.message });
       res.status(500).json({ error: 'Failed to shorten URL' });

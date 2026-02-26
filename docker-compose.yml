@@ -51,7 +51,6 @@ services:
       - DATABASE_URL=postgresql://postgres:password@db:5432/url_service
       - JWT_SECRET=your_jwt_secret
       - RABBITMQ_URL=amqp://rabbitmq
-      - PREVIEW_SERVICE_URL=http://preview-service:8000
 
   preview-service:
     build:
@@ -59,9 +58,13 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_started
     environment:
       - REQUEST_TIMEOUT=5
       - LOG_LEVEL=info
+      - RABBITMQ_URL=amqp://rabbitmq
 
   analytics-service:
     <<: *current-user

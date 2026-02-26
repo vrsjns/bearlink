@@ -5,7 +5,6 @@ const { connectRabbitMQ } = require('shared/utils/rabbitmq');
 const { createLogger } = require('shared/utils/logger');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
 const { createEventPublisher, QUEUES } = require('shared/events');
-const { createPreviewClient } = require('./services/preview.client');
 const { createApp } = require('./app');
 
 const logger = createLogger('url-service');
@@ -18,15 +17,44 @@ let rabbitChannel = null;
 
 connectRabbitMQ().then((channel) => {
   rabbitChannel = channel;
-  channel.assertQueue(QUEUES.EVENTS);
+  channel.assertQueue(QUEUES.EVENTS, { durable: true });
+  channel.assertQueue(QUEUES.PREVIEW_JOBS, { durable: true });
+  channel.assertQueue(QUEUES.PREVIEW_RESULTS, { durable: true });
 
   const eventPublisher = createEventPublisher(channel);
-  const previewClient = process.env.PREVIEW_SERVICE_URL
-    ? createPreviewClient(process.env.PREVIEW_SERVICE_URL)
-    : null;
-  const app = createApp({ prisma, eventPublisher, baseUrl, previewClient });
 
-  // Health check endpoints (need access to rabbitChannel)
+  const publishPreviewJob = ({ urlId, originalUrl }) => {
+    channel.sendToQueue(
+      QUEUES.PREVIEW_JOBS,
+      Buffer.from(JSON.stringify({ urlId, originalUrl })),
+      { persistent: true },
+    );
+  };
+
+  // Consume preview results and write metadata back to the URL record
+  channel.consume(QUEUES.PREVIEW_RESULTS, async (msg) => {
+    if (!msg) return;
+    try {
+      const { urlId, title, description, image } = JSON.parse(msg.content.toString());
+      await prisma.uRL.update({
+        where: { id: urlId },
+        data: {
+          previewTitle: title,
+          previewDescription: description,
+          previewImageUrl: image,
+          previewFetchedAt: new Date(),
+        },
+      });
+      channel.ack(msg);
+      logger.info('Preview metadata saved', { urlId });
+    } catch (err) {
+      logger.error('Failed to save preview result', { error: err.message });
+      channel.nack(msg, false, false);
+    }
+  });
+
+  const app = createApp({ prisma, eventPublisher, baseUrl, publishPreviewJob });
+
   app.get('/health', healthHandler);
   app.get('/ready', createReadinessHandler({
     database: async () => { await prisma.$queryRaw`SELECT 1`; },
@@ -49,15 +77,11 @@ const gracefulShutdown = server => async () => {
 
   server.close(async () => {
     logger.info('Server closed.');
-
-    // Disconnect Prisma
     await prisma.$disconnect();
     logger.info('Prisma disconnected.');
-
     process.exit(0);
   });
 
-  // Force close the server after 5 seconds
   setTimeout(() => {
     logger.error('Could not close connections in time, forcefully shutting down');
     process.exit(1);
