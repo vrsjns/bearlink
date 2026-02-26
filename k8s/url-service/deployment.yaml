@@ -22,7 +22,7 @@ spec:
             - until pg_isready -h postgres -U postgres; do echo "waiting for postgres..."; sleep 2; done
       containers:
         - name: url-service
-          image: ghcr.io/vrsjns/url-service:latest
+          image: url-service:latest
           ports:
             - containerPort: 5000
           env:

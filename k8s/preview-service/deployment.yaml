@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: preview-service
-          image: ghcr.io/vrsjns/preview-service:latest
+          image: preview-service:latest
           ports:
             - containerPort: 8000
           env:

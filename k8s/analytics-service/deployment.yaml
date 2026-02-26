@@ -22,7 +22,7 @@ spec:
             - until pg_isready -h postgres -U postgres; do echo "waiting for postgres..."; sleep 2; done
       containers:
         - name: analytics-service
-          image: ghcr.io/vrsjns/analytics-service:latest
+          image: analytics-service:latest
           ports:
             - containerPort: 6000
           env:

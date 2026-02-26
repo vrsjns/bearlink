@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - postgres/configmap.yaml
+  - postgres/statefulset.yaml
+  - postgres/service.yaml
+  - rabbitmq/statefulset.yaml
+  - rabbitmq/service.yaml
+  - smtp/deployment.yaml
+  - smtp/service.yaml
+  - auth-service/deployment.yaml
+  - auth-service/service.yaml
+  - url-service/deployment.yaml
+  - url-service/service.yaml
+  - analytics-service/deployment.yaml
+  - analytics-service/service.yaml
+  - notification-service/deployment.yaml
+  - notification-service/service.yaml
+  - preview-service/deployment.yaml
+  - preview-service/service.yaml
+  - web-ui/deployment.yaml
+  - web-ui/service.yaml
+  - observability/loki-configmap.yaml
+  - observability/loki.yaml
+  - observability/promtail-configmap.yaml
+  - observability/promtail.yaml
+  - observability/grafana.yaml
+  - ingress.yaml
+
+# Single place to change the image registry owner.
+# Deployments use plain names (e.g. `auth-service:latest`);
+# Kustomize rewrites them to the full GHCR path at apply time.
+images:
+  - name: auth-service
+    newName: ghcr.io/vrsjns/auth-service
+  - name: url-service
+    newName: ghcr.io/vrsjns/url-service
+  - name: analytics-service
+    newName: ghcr.io/vrsjns/analytics-service
+  - name: notification-service
+    newName: ghcr.io/vrsjns/notification-service
+  - name: preview-service
+    newName: ghcr.io/vrsjns/preview-service
+  - name: web-ui
+    newName: ghcr.io/vrsjns/web-ui

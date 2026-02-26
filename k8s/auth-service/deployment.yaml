@@ -22,7 +22,7 @@ spec:
             - until pg_isready -h postgres -U postgres; do echo "waiting for postgres..."; sleep 2; done
       containers:
         - name: auth-service
-          image: ghcr.io/vrsjns/auth-service:latest
+          image: auth-service:latest
           ports:
             - containerPort: 4000
           env:
