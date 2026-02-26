@@ -11,9 +11,9 @@ const { createUrlsController } = require('../controllers/urls.controller');
  * @param {string} deps.baseUrl - Base URL for short links
  * @returns {express.Router} URLs router
  */
-const createUrlsRoutes = ({ prisma, eventPublisher, baseUrl }) => {
+const createUrlsRoutes = ({ prisma, eventPublisher, baseUrl, previewClient }) => {
   const router = express.Router();
-  const controller = createUrlsController({ prisma, eventPublisher, baseUrl });
+  const controller = createUrlsController({ prisma, eventPublisher, baseUrl, previewClient });
 
   router.get('/urls', authenticateJWT, apiLimiter, controller.listUrls);
   router.post('/urls', authenticateJWT, apiLimiter, controller.createUrl);

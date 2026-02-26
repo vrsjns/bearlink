@@ -5,6 +5,7 @@ const { connectRabbitMQ } = require('shared/utils/rabbitmq');
 const { createLogger } = require('shared/utils/logger');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
 const { createEventPublisher, QUEUES } = require('shared/events');
+const { createPreviewClient } = require('./services/preview.client');
 const { createApp } = require('./app');
 
 const logger = createLogger('url-service');
@@ -20,7 +21,10 @@ connectRabbitMQ().then((channel) => {
   channel.assertQueue(QUEUES.EVENTS);
 
   const eventPublisher = createEventPublisher(channel);
-  const app = createApp({ prisma, eventPublisher, baseUrl });
+  const previewClient = process.env.PREVIEW_SERVICE_URL
+    ? createPreviewClient(process.env.PREVIEW_SERVICE_URL)
+    : null;
+  const app = createApp({ prisma, eventPublisher, baseUrl, previewClient });
 
   // Health check endpoints (need access to rabbitChannel)
   app.get('/health', healthHandler);

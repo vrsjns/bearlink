@@ -8,12 +8,18 @@ generator client {
 }
 
 model URL {
-  id          Int      @id @default(autoincrement())
-  originalUrl String
-  shortId     String   @unique
-  clicks      Int      @default(0)
-  createdAt   DateTime @default(now())
-  userId      Int
+  id                 Int       @id @default(autoincrement())
+  originalUrl        String
+  shortId            String    @unique
+  clicks             Int       @default(0)
+  createdAt          DateTime  @default(now())
+  userId             Int
+
+  // Preview metadata (populated async after creation)
+  previewTitle       String?
+  previewDescription String?
+  previewImageUrl    String?
+  previewFetchedAt   DateTime?
 }
 
 enum Role {
