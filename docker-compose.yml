@@ -96,6 +96,26 @@ services:
       - EMAIL_PASS=test_password
       - RABBITMQ_URL=amqp://rabbitmq
 
+  link-management-service:
+    build:
+      context: ./
+      dockerfile: ./link-management-service/Dockerfile
+    volumes:
+      - ./link-management-service:/app/link-management-service
+      - /app/link-management-service/node_modules
+    ports:
+      - "9000:9000"
+    depends_on:
+      rabbitmq:
+        condition: service_started
+      db:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/link_management
+      - JWT_SECRET=your_jwt_secret
+      - RABBITMQ_URL=amqp://rabbitmq
+      - PORT=9000
+
   web-ui:
     <<: *current-user
     build: ./web-ui
