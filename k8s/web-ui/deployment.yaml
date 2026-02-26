@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-ui
+  namespace: bearlink
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-ui
+  template:
+    metadata:
+      labels:
+        app: web-ui
+    spec:
+      containers:
+        - name: web-ui
+          image: ghcr.io/<owner>/web-ui:latest
+          ports:
+            - containerPort: 3000
+          env:
+            # IMPORTANT: NEXT_PUBLIC_* variables are inlined at build time, not runtime.
+            # These env vars are informational — the image must be built with the correct
+            # values baked in. Set them as Docker build args:
+            #   docker build --build-arg NEXT_PUBLIC_AUTH_SERVICE_URL=/api/auth ...
+            #
+            # With the Traefik ingress stripping prefixes, the frontend can use
+            # relative paths so it works regardless of the domain:
+            - name: NEXT_PUBLIC_AUTH_SERVICE_URL
+              value: "/api/auth"
+            - name: NEXT_PUBLIC_URL_SERVICE_URL
+              value: "/api/urls"
+            - name: NEXT_PUBLIC_ANALYTICS_SERVICE_URL
+              value: "/api/analytics"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
