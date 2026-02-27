@@ -1,7 +1,7 @@
 asyncapi: '2.6.0'
 info:
   title: BearLink Event API
-  version: '1.0.0'
+  version: '2.0.0'
   description: |
     Event-driven communication specification for BearLink URL shortening service.
 
@@ -26,7 +26,9 @@ defaultContentType: application/json
 
 channels:
   events:
-    description: Domain events channel for cross-service communication
+    description: |
+      Domain events channel for cross-service communication.
+      Published by auth-service and url-service; consumed by analytics-service.
     publish:
       operationId: publishEvent
       summary: Publish domain events
@@ -34,6 +36,8 @@ channels:
         oneOf:
           - $ref: '#/components/messages/UserRegistered'
           - $ref: '#/components/messages/UrlCreated'
+          - $ref: '#/components/messages/UrlUpdated'
+          - $ref: '#/components/messages/UrlDeleted'
           - $ref: '#/components/messages/UrlClicked'
     subscribe:
       operationId: consumeEvent
@@ -42,10 +46,14 @@ channels:
         oneOf:
           - $ref: '#/components/messages/UserRegistered'
           - $ref: '#/components/messages/UrlCreated'
+          - $ref: '#/components/messages/UrlUpdated'
+          - $ref: '#/components/messages/UrlDeleted'
           - $ref: '#/components/messages/UrlClicked'
 
   email_notifications:
-    description: Email notification channel for sending emails via notification service
+    description: |
+      Email notification channel for sending emails via notification-service.
+      Published by auth-service; consumed by notification-service.
     publish:
       operationId: publishEmailNotification
       summary: Queue an email for delivery
@@ -56,6 +64,36 @@ channels:
       summary: Process email delivery requests
       message:
         $ref: '#/components/messages/EmailNotification'
+
+  preview_jobs:
+    description: |
+      Requests url-service sends to preview-service to trigger async metadata scraping.
+      Published by url-service on URL creation; consumed by preview-service.
+    publish:
+      operationId: publishPreviewJob
+      summary: Request metadata scrape for a new URL
+      message:
+        $ref: '#/components/messages/PreviewRequested'
+    subscribe:
+      operationId: consumePreviewJob
+      summary: Process metadata scrape request
+      message:
+        $ref: '#/components/messages/PreviewRequested'
+
+  preview_results:
+    description: |
+      Scrape results sent from preview-service back to url-service.
+      Published by preview-service; consumed by url-service to update the URL record.
+    publish:
+      operationId: publishPreviewResult
+      summary: Deliver scraped metadata back to url-service
+      message:
+        $ref: '#/components/messages/PreviewReady'
+    subscribe:
+      operationId: consumePreviewResult
+      summary: Receive and store scraped metadata
+      message:
+        $ref: '#/components/messages/PreviewReady'
 
 components:
   messages:
@@ -75,10 +113,29 @@ components:
       payload:
         $ref: '#/components/schemas/UrlCreatedEvent'
 
+    UrlUpdated:
+      name: UrlUpdated
+      title: URL Updated Event
+      summary: Published when a user updates an existing shortened URL
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UrlUpdatedEvent'
+
+    UrlDeleted:
+      name: UrlDeleted
+      title: URL Deleted Event
+      summary: Published when a user deletes a shortened URL
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UrlDeletedEvent'
+
     UrlClicked:
       name: UrlClicked
       title: URL Clicked Event
-      summary: Published when a shortened URL is accessed/clicked
+      summary: |
+        Published when a shortened URL is accessed by a human visitor.
+        Bot requests (detected by User-Agent) do not trigger this event.
+        Duplicate clicks from the same IP within the same hour are deduplicated.
       contentType: application/json
       payload:
         $ref: '#/components/schemas/UrlClickedEvent'
@@ -91,122 +148,224 @@ components:
       payload:
         $ref: '#/components/schemas/EmailNotificationPayload'
 
+    PreviewRequested:
+      name: PreviewRequested
+      title: Preview Requested
+      summary: Request to scrape metadata for a newly created URL
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PreviewRequestedPayload'
+
+    PreviewReady:
+      name: PreviewReady
+      title: Preview Ready
+      summary: Scraped metadata result returned by the preview-service
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PreviewReadyPayload'
+
   schemas:
     UserRegisteredEvent:
       type: object
-      required:
-        - type
-        - payload
+      required: [type, payload]
       properties:
         type:
           type: string
           const: user_registered
-          description: Event type identifier
         payload:
           $ref: '#/components/schemas/UserRegisteredPayload'
 
     UserRegisteredPayload:
       type: object
-      required:
-        - id
-        - email
-        - name
-        - role
-        - createdAt
+      required: [id, email, name, role, createdAt]
       properties:
         id:
           type: integer
-          description: Unique user identifier
           example: 1
         email:
           type: string
           format: email
-          description: User's email address
           example: user@example.com
         name:
           type: string
-          description: User's display name
           example: John Doe
         role:
           type: string
-          enum: [user, admin]
-          description: User's role in the system
-          example: user
+          enum: [USER, ADMIN]
+          example: USER
         createdAt:
           type: string
           format: date-time
-          description: Timestamp of user creation
           example: '2024-01-15T10:30:00.000Z'
 
     UrlCreatedEvent:
       type: object
-      required:
-        - type
-        - payload
+      required: [type, payload]
       properties:
         type:
           type: string
           const: url_created
-          description: Event type identifier
         payload:
           $ref: '#/components/schemas/UrlCreatedPayload'
 
     UrlCreatedPayload:
       type: object
-      required:
-        - id
-        - originalUrl
-        - shortId
-        - clicks
-        - createdAt
-        - userId
+      required: [id, originalUrl, shortId, clicks, createdAt, userId]
       properties:
         id:
           type: integer
-          description: Unique URL record identifier
           example: 42
         originalUrl:
           type: string
           format: uri
-          description: The original long URL
           example: https://example.com/very/long/path
         shortId:
           type: string
-          description: Generated short identifier (10 characters)
           example: abc123XYZ0
+        customAlias:
+          type: string
+          nullable: true
+          example: my-campaign
+        redirectType:
+          type: integer
+          enum: [301, 302]
+          example: 302
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        tags:
+          type: array
+          items:
+            type: string
+          example: [marketing]
+        utmParams:
+          type: object
+          nullable: true
+          example: null
+        requireSignature:
+          type: boolean
+          example: false
         clicks:
           type: integer
           minimum: 0
-          description: Number of times the URL has been clicked
           example: 0
         createdAt:
           type: string
           format: date-time
-          description: Timestamp of URL creation
           example: '2024-01-15T10:30:00.000Z'
         userId:
           type: integer
-          description: ID of the user who created the URL
+          example: 1
+
+    UrlUpdatedEvent:
+      type: object
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          const: url_updated
+        payload:
+          $ref: '#/components/schemas/UrlUpdatedPayload'
+
+    UrlUpdatedPayload:
+      type: object
+      description: The full updated URL record (same shape as UrlCreatedPayload)
+      required: [id, originalUrl, shortId, clicks, createdAt, userId]
+      properties:
+        id:
+          type: integer
+          example: 42
+        originalUrl:
+          type: string
+          format: uri
+          example: https://example.com/new/path
+        shortId:
+          type: string
+          example: abc123XYZ0
+        customAlias:
+          type: string
+          nullable: true
+          example: my-campaign
+        redirectType:
+          type: integer
+          enum: [301, 302]
+          example: 302
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        tags:
+          type: array
+          items:
+            type: string
+          example: [marketing, updated]
+        utmParams:
+          type: object
+          nullable: true
+          example: null
+        requireSignature:
+          type: boolean
+          example: false
+        clicks:
+          type: integer
+          example: 17
+        createdAt:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00.000Z'
+        userId:
+          type: integer
+          example: 1
+
+    UrlDeletedEvent:
+      type: object
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          const: url_deleted
+        payload:
+          $ref: '#/components/schemas/UrlDeletedPayload'
+
+    UrlDeletedPayload:
+      type: object
+      description: The deleted URL record at the time of deletion
+      required: [id, originalUrl, shortId, userId]
+      properties:
+        id:
+          type: integer
+          example: 42
+        originalUrl:
+          type: string
+          format: uri
+          example: https://example.com/very/long/path
+        shortId:
+          type: string
+          example: abc123XYZ0
+        customAlias:
+          type: string
+          nullable: true
+          example: null
+        userId:
+          type: integer
           example: 1
 
     UrlClickedEvent:
       type: object
-      required:
-        - type
-        - payload
+      required: [type, payload]
       properties:
         type:
           type: string
           const: url_clicked
-          description: Event type identifier
         payload:
           $ref: '#/components/schemas/UrlClickedPayload'
 
     UrlClickedPayload:
       type: object
-      required:
-        - shortId
-        - originalUrl
+      required: [shortId, originalUrl]
       properties:
         shortId:
           type: string
@@ -217,26 +376,35 @@ components:
           format: uri
           description: The original URL being redirected to
           example: https://example.com/very/long/path
+        referer:
+          type: string
+          nullable: true
+          description: HTTP Referer header (null if not present)
+          example: https://twitter.com
+        userAgent:
+          type: string
+          nullable: true
+          description: User-Agent header of the visitor
+          example: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+        country:
+          type: string
+          nullable: true
+          description: Two-letter country code derived from IP via GeoIP lookup (null if unresolved)
+          example: US
 
     EmailNotificationPayload:
       type: object
-      required:
-        - to
-        - subject
-        - text
+      required: [to, subject, text]
       properties:
         to:
           type: string
           format: email
-          description: Recipient email address
           example: user@example.com
         subject:
           type: string
-          description: Email subject line
           example: Welcome to BearLink!
         text:
           type: string
-          description: Plain text email body
           example: |
             Hello John,
 
@@ -244,3 +412,41 @@ components:
 
             Best Regards,
             BearLink Team
+
+    PreviewRequestedPayload:
+      type: object
+      required: [urlId, originalUrl]
+      properties:
+        urlId:
+          type: integer
+          description: ID of the URL record to update with scraped metadata
+          example: 42
+        originalUrl:
+          type: string
+          format: uri
+          description: The destination URL to scrape
+          example: https://example.com/very/long/path
+
+    PreviewReadyPayload:
+      type: object
+      required: [urlId]
+      properties:
+        urlId:
+          type: integer
+          description: ID of the URL record to update
+          example: 42
+        title:
+          type: string
+          nullable: true
+          description: Page title scraped from the destination URL
+          example: Example Domain
+        description:
+          type: string
+          nullable: true
+          description: Meta description scraped from the destination URL
+          example: This domain is for use in illustrative examples.
+        imageUrl:
+          type: string
+          nullable: true
+          description: OG image URL scraped from the destination URL
+          example: https://example.com/og-image.png

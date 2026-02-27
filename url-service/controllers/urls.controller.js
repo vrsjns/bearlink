@@ -3,6 +3,9 @@ const { createLogger } = require('shared/utils/logger');
 const { isValidUrl, validateRequiredFields, validationError } = require('shared/utils/validation');
 const { generateShortId } = require('../services/url.service');
 const { invalidateUrlCache } = require('./redirect.controller');
+const { checkUrlSafety } = require('../services/safeBrowsing.service');
+const { checkDomain } = require('../services/domainFilter.service');
+const { signUrl } = require('../services/signedUrl.service');
 
 const logger = createLogger('url-service');
 
@@ -127,6 +130,8 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       password,
       tags = [],
       utmParams,
+      requireSignature = false,
+      signedTtl,
     } = req.body;
     const { id: userId } = req.user;
 
@@ -137,6 +142,16 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
 
     if (!isValidUrl(originalUrl)) {
       return validationError(res, 'Invalid URL. Must be a valid HTTP or HTTPS URL.');
+    }
+
+    const domainCheck = checkDomain(originalUrl);
+    if (!domainCheck.allowed) {
+      return res.status(422).json({ error: domainCheck.reason });
+    }
+
+    const isSafe = await checkUrlSafety(originalUrl, process.env.SAFE_BROWSING_API_KEY);
+    if (!isSafe) {
+      return res.status(422).json({ error: 'URL flagged as unsafe by Safe Browsing check.' });
     }
 
     if (!VALID_REDIRECT_TYPES.includes(redirectType)) {
@@ -176,7 +191,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
         // Custom alias — single attempt; P2002 means the alias is taken
         try {
           newUrl = await prisma.uRL.create({
-            data: { originalUrl, shortId: generateShortId(), customAlias, userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams },
+            data: { originalUrl, shortId: generateShortId(), customAlias, userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams, requireSignature },
           });
         } catch (error) {
           if (error.code === 'P2002') {
@@ -189,7 +204,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
         for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
           try {
             newUrl = await prisma.uRL.create({
-              data: { originalUrl, shortId: generateShortId(), userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams },
+              data: { originalUrl, shortId: generateShortId(), userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams, requireSignature },
             });
             break;
           } catch (error) {
@@ -209,7 +224,15 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       }
 
       const slug = newUrl.customAlias || newUrl.shortId;
-      res.json({ shortUrl: `${baseUrl}/${slug}` });
+      const shortUrl = `${baseUrl}/${slug}`;
+
+      if (requireSignature && process.env.URL_SIGNING_SECRET) {
+        const ttl = Number.isInteger(signedTtl) && signedTtl > 0 ? signedTtl : undefined;
+        const signed = signUrl(shortUrl, process.env.URL_SIGNING_SECRET, ttl);
+        return res.json({ shortUrl, signedUrl: signed });
+      }
+
+      res.json({ shortUrl });
     } catch (error) {
       logger.error('Error shortening URL', { error: error.message });
       res.status(500).json({ error: 'Failed to shorten URL' });
@@ -320,7 +343,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     const {
       user: { id: userId },
       params: { id },
-      body: { originalUrl, redirectType, customAlias, expiresAt, password, tags, utmParams },
+      body: { originalUrl, redirectType, customAlias, expiresAt, password, tags, utmParams, requireSignature },
     } = req;
 
     const urlId = Number.parseInt(id, 10);
@@ -337,6 +360,16 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
 
     if (!isValidUrl(originalUrl)) {
       return validationError(res, 'Invalid URL. Must be a valid HTTP or HTTPS URL.');
+    }
+
+    const domainCheck = checkDomain(originalUrl);
+    if (!domainCheck.allowed) {
+      return res.status(422).json({ error: domainCheck.reason });
+    }
+
+    const isSafe = await checkUrlSafety(originalUrl, process.env.SAFE_BROWSING_API_KEY);
+    if (!isSafe) {
+      return res.status(422).json({ error: 'URL flagged as unsafe by Safe Browsing check.' });
     }
 
     if (redirectType !== undefined && !VALID_REDIRECT_TYPES.includes(redirectType)) {
@@ -373,6 +406,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       data.passwordHash = password === null ? null : await bcrypt.hash(password, 10);
     }
     if (utmParams !== undefined) data.utmParams = utmParams;
+    if (requireSignature !== undefined) data.requireSignature = requireSignature;
 
     try {
       const updatedUrl = await prisma.uRL.update({ where: { userId, id: urlId }, data });
@@ -418,12 +452,41 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     }
   };
 
+  const signUrlEndpoint = async (req, res) => {
+    const { id } = req.params;
+    const { id: userId } = req.user;
+    const { ttl } = req.body;
+
+    const urlId = Number.parseInt(id, 10);
+    if (!Number.isInteger(urlId)) {
+      return res.status(400).json({ error: 'Invalid URL ID.' });
+    }
+
+    const secret = process.env.URL_SIGNING_SECRET;
+    if (!secret) {
+      return res.status(503).json({ error: 'URL signing is not configured.' });
+    }
+
+    const url = await prisma.uRL.findFirst({ where: { id: urlId, userId } });
+    if (!url) {
+      return res.status(404).json({ error: 'URL not found.' });
+    }
+
+    const slug = url.customAlias || url.shortId;
+    const shortUrl = `${baseUrl}/${slug}`;
+    const ttlSeconds = Number.isInteger(ttl) && ttl > 0 ? ttl : undefined;
+    const signed = signUrl(shortUrl, secret, ttlSeconds);
+
+    res.json({ signedUrl: signed });
+  };
+
   return {
     listUrls,
     createUrl,
     createUrlsBulk,
     updateUrl,
     deleteUrl,
+    signUrlEndpoint,
   };
 };
 

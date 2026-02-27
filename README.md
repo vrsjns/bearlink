@@ -80,11 +80,20 @@ Handles user accounts and authentication.
 
 Creates and resolves short links.
 
-- `POST /urls` — shorten a URL, returns `shortId`
-- `GET /urls` — list your links
+**URL management (authenticated):**
+- `POST /urls` — shorten a URL; supports custom alias, expiry, password, tags, UTM params, signed URLs
+- `GET /urls` — list your links (paginated; filter by tag, search, expired)
+- `POST /urls/bulk` — create up to 50 links in one request (partial-success)
 - `PUT /urls/:id` — update a link
 - `DELETE /urls/:id` — delete a link
-- `GET /:shortId` — redirect (302) to original URL and increment click counter
+- `POST /urls/:id/sign` — generate a time-limited HMAC-signed URL
+
+**Public redirect:**
+- `GET /:shortId` — redirect to original URL (301/302); supports `?preview=1` for bounce page
+- `GET /:shortId/qr` — return a PNG QR code for the short link
+- `POST /:shortId/unlock` — submit password for a password-protected link
+
+Clicks are deduplicated per IP per hour via Redis. Bots (detected by User-Agent) are redirected but not counted.
 
 ### analytics-service (port 6000)
 
@@ -92,7 +101,7 @@ Stores every domain event consumed from RabbitMQ.
 
 - `GET /events` — list all events
 
-Events stored: `user_registered`, `url_created`, `url_clicked`.
+Events stored: `user_registered`, `url_created`, `url_updated`, `url_deleted`, `url_clicked`.
 
 ### notification-service (port 7000)
 
@@ -113,14 +122,14 @@ Next.js 14 frontend. Pages: login, register, dashboard (URL management), profile
 
 ## Event-Driven Communication
 
-Services communicate asynchronously via RabbitMQ with two queues:
+Services communicate asynchronously via RabbitMQ:
 
 | Queue                 | Publisher(s)              | Consumer(s)          | Purpose                        |
 |-----------------------|---------------------------|----------------------|--------------------------------|
 | `events`              | auth-service, url-service | analytics-service    | Domain events for audit log    |
 | `email_notifications` | auth-service              | notification-service | Email delivery payloads        |
-| `preview_requested`   | url-service               | preview-service      | Async metadata scrape trigger  |
-| `preview_ready`       | preview-service           | url-service          | Scraped metadata result        |
+| `preview_jobs`        | url-service               | preview-service      | Async metadata scrape trigger  |
+| `preview_results`     | preview-service           | url-service          | Scraped metadata result        |
 
 RabbitMQ connections retry up to 30 times (2 s intervals) before giving up. See `docs/asyncapi.yaml` for full event schemas.
 
@@ -148,6 +157,7 @@ RabbitMQ connections retry up to 30 times (2 s intervals) before giving up. See 
 **Infrastructure**
 - PostgreSQL (single instance, 3 databases)
 - RabbitMQ 3 with management UI
+- Redis 7 (URL caching, click deduplication)
 - MailHog for development email
 - Loki + Promtail + Grafana for log aggregation and dashboards
 
@@ -201,6 +211,11 @@ Each service reads its own set of variables. The Docker Compose file injects all
 | `SMTP_PORT`                       | notification-service       | `1025`                                                  |
 | `EMAIL_USER`                      | notification-service       | `notification@bear.link`                                |
 | `EMAIL_PASS`                      | notification-service       | `secret`                                                |
+| `REDIS_URL`                       | url-service                | `redis://localhost:6379`                                |
+| `SAFE_BROWSING_API_KEY`           | url-service (optional)     | Google Safe Browsing API v4 key                         |
+| `DOMAIN_BLOCKLIST`                | url-service (optional)     | `evil.com,bad.org` (comma-separated)                    |
+| `DOMAIN_ALLOWLIST`                | url-service (optional)     | `example.com,trusted.org` (comma-separated)             |
+| `URL_SIGNING_SECRET`              | url-service (optional)     | `openssl rand -hex 32`                                  |
 | `NEXT_PUBLIC_AUTH_SERVICE_URL`    | web-ui                     | `http://localhost:4000`                                 |
 | `NEXT_PUBLIC_URL_SERVICE_URL`     | web-ui                     | `http://localhost:5000`                                 |
 | `NEXT_PUBLIC_ANALYTICS_SERVICE_URL` | web-ui                   | `http://localhost:6000`                                 |

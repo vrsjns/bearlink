@@ -70,10 +70,10 @@ kubectl get pods -n bearlink
 Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (1025/8025)
 
 ### Message Queues (RabbitMQ)
-- `events` - Domain events (user_registered, url_created, url_clicked)
+- `events` - Domain events (user_registered, url_created, url_updated, url_deleted, url_clicked)
 - `email_notifications` - Email delivery payloads
-- `preview_requested` - url-service → preview-service (trigger async metadata scrape)
-- `preview_ready` - preview-service → url-service (scraped metadata result)
+- `preview_jobs` - url-service → preview-service (trigger async metadata scrape)
+- `preview_results` - preview-service → url-service (scraped metadata result)
 
 ### Shared Code (`/shared`)
 - `utils/logger.js` - Winston logger (console + file)
@@ -88,12 +88,12 @@ Services communicate via RabbitMQ using the shared events module (`shared/events
 | Service | Role | Events |
 |---------|------|--------|
 | auth-service | Publisher | `user_registered`, email notifications |
-| url-service | Publisher | `url_created`, `url_clicked`, `preview_requested` |
-| url-service | Consumer | `preview_ready` |
-| analytics-service | Consumer | All domain events |
+| url-service | Publisher | `url_created`, `url_updated`, `url_deleted`, `url_clicked`, `preview_jobs` |
+| url-service | Consumer | `preview_results` |
+| analytics-service | Consumer | All domain events (`user_registered`, `url_created`, `url_updated`, `url_deleted`, `url_clicked`) |
 | notification-service | Consumer | Email notifications |
-| preview-service | Consumer | `preview_requested` |
-| preview-service | Publisher | `preview_ready` |
+| preview-service | Consumer | `preview_jobs` |
+| preview-service | Publisher | `preview_results` |
 
 See each service's `CLAUDE.md` for implementation details.
 
@@ -126,3 +126,7 @@ Key variables (set via docker-compose or .env files):
 - `JWT_SECRET` - Shared JWT signing secret
 - `RABBITMQ_URL` - RabbitMQ connection URL
 - `SMTP_HOST`, `SMTP_PORT` - Mail server configuration
+- `REDIS_URL` - Redis connection string (url-service only, optional)
+- `SAFE_BROWSING_API_KEY` - Google Safe Browsing API v4 key (url-service only, optional)
+- `DOMAIN_BLOCKLIST` / `DOMAIN_ALLOWLIST` - Comma-separated domain filter lists (url-service only, optional)
+- `URL_SIGNING_SECRET` - HMAC secret for signed short URLs (url-service only, optional)

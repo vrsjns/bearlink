@@ -2,74 +2,114 @@
 
 URL shortening service handling link creation, management, and redirection.
 
-**Port:** 5000 | **API Docs:** See [OpenAPI spec](../docs/openapi.yaml) (tag: `urls`)
+**Port:** 5000 | **API Docs:** See [OpenAPI spec](../docs/openapi.yaml) (tags: `urls`, `redirect`)
 
 ## Project Structure
 
 ```
 url-service/
-├── index.js              # Entry point: DB/RabbitMQ init, server start, shutdown
+├── index.js              # Entry point: DB/RabbitMQ/Redis init, server start, shutdown
 ├── app.js                # Express app factory: middleware setup, route mounting
 ├── routes/
 │   ├── index.js          # Combine routers, export single router factory
-│   ├── urls.routes.js    # /urls CRUD endpoints
-│   └── redirect.routes.js # /:shortId redirect endpoint
+│   ├── urls.routes.js    # Authenticated CRUD + bulk + sign endpoints
+│   └── redirect.routes.js # Public redirect, QR, and unlock endpoints
 ├── controllers/
-│   ├── urls.controller.js    # list, create, update, delete handlers
-│   └── redirect.controller.js # redirect handler
+│   ├── urls.controller.js    # list, create, createBulk, update, delete, signUrl handlers
+│   └── redirect.controller.js # redirect, qr, unlock handlers + findUrl/invalidateUrlCache helpers
 ├── services/
-│   └── url.service.js    # generateShortId helper
+│   ├── url.service.js          # generateShortId helper (nanoid)
+│   ├── preview.client.js       # Publish preview_jobs / consume preview_results
+│   ├── rateLimiters.js         # createRedisRateLimiters(redisClient) factory
+│   ├── safeBrowsing.service.js # checkUrlSafety(url, apiKey, httpClient?)
+│   ├── domainFilter.service.js # checkDomain(url) — reads DOMAIN_BLOCKLIST/ALLOWLIST env
+│   └── signedUrl.service.js    # signUrl / verifyUrl (HMAC-SHA256)
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
+├── test/
+│   ├── mocks/                  # prisma, rabbitmq, redis mock factories
+│   ├── url.service.test.ts
+│   ├── urls.routes.test.ts
+│   ├── redirect.routes.test.ts
+│   ├── redis.routes.test.ts
+│   └── security.test.ts
 └── CLAUDE.md
 ```
 
 ## Dependency Injection Pattern
-
-The service uses factory functions with dependency injection:
 
 ```javascript
 // Entry point creates dependencies
 const prisma = new PrismaClient();
 const eventPublisher = createEventPublisher(channel);
 const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
+const redis = new Redis(process.env.REDIS_URL, { lazyConnect: true });
 
 // App factory receives dependencies
-const app = createApp({ prisma, eventPublisher, baseUrl });
+const app = createApp({ prisma, eventPublisher, baseUrl, redis });
 
 // Routes receive dependencies and pass to controllers
-const createRoutes = ({ prisma, eventPublisher, baseUrl }) => {
-  router.use(createUrlsRoutes({ prisma, eventPublisher, baseUrl }));
-  router.use(createRedirectRoutes({ prisma, eventPublisher }));
+const createRoutes = ({ prisma, eventPublisher, baseUrl, redis, publishPreviewJob }) => {
+  router.use(createUrlsRoutes({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis }));
+  router.use(createRedirectRoutes({ prisma, eventPublisher, baseUrl, redis }));
   return router;
 };
 ```
 
+Redis is **optional** — the service starts and operates normally without it. All Redis calls are fail-open (errors are logged and execution continues).
+
 ## Event Publishing
 
-This service **publishes** events to RabbitMQ. It does not consume events.
+This service **publishes** events to RabbitMQ and **consumes** `preview_results`.
 
-### Events Published
+### Events Published (queue: `events`)
 
-**On URL creation (`POST /urls`):**
-- `url_created` - Contains the full URL record
+| Trigger | Event | Notes |
+|---------|-------|-------|
+| `POST /urls` | `url_created` | Full URL record (passwordHash stripped) |
+| `PUT /urls/:id` | `url_updated` | Full updated URL record (passwordHash stripped) |
+| `DELETE /urls/:id` | `url_deleted` | Deleted URL record (passwordHash stripped) |
+| `GET /:shortId` (human, unique) | `url_clicked` | Includes shortId, originalUrl, referer, userAgent, country |
+| `POST /:shortId/unlock` | `url_clicked` | Same fields as above |
 
-**On URL redirect (`GET /:shortId`):**
-- `url_clicked` - Contains `shortId` and `originalUrl`
+Bot requests (matched by User-Agent) and duplicate clicks from the same IP within the same hour do **not** emit `url_clicked`.
+
+### Preview Pipeline (queues: `preview_jobs` / `preview_results`)
+
+On URL creation, `publishPreviewJob({ urlId, originalUrl })` sends a message to `preview_jobs`.
+The preview-service scrapes metadata and replies to `preview_results`.
+url-service consumes `preview_results` and updates the URL record's preview fields.
 
 ### Code Pattern
 
 ```javascript
 const { createEventPublisher, QUEUES } = require('shared/events');
 
-// Setup (after RabbitMQ connection)
-channel.assertQueue(QUEUES.EVENTS);
 const eventPublisher = createEventPublisher(channel);
 
-// On URL creation
-eventPublisher.publishUrlCreated(newUrl);
-
-// On redirect (after incrementing click counter)
-eventPublisher.publishUrlClicked({ shortId, originalUrl: url.originalUrl });
+eventPublisher.publishUrlCreated(sanitizeForEvent(newUrl));
+eventPublisher.publishUrlUpdated(sanitizeForEvent(updatedUrl));
+eventPublisher.publishUrlDeleted(sanitizeForEvent(deletedUrl));
+eventPublisher.publishUrlClicked({
+  shortId: url.shortId,
+  originalUrl: url.originalUrl,
+  referer,
+  userAgent,
+  country,
+});
 ```
+
+## Redis Usage
+
+Redis is used in **controllers only** (not in rate-limit middleware) to avoid test complexity.
+
+| Feature | Key pattern | TTL | Notes |
+|---------|-------------|-----|-------|
+| URL cache | `url:{slug}` | 60s | Set on cache miss; deleted on update/delete |
+| Click dedup | `dedup:{shortId}:{ip}:{hour}` | 3600s | SET NX — only count first click per IP per hour |
+
+`createRedisRateLimiters` in `services/rateLimiters.js` is available but currently not wired into routes (routes use the shared in-memory limiters). It can be activated by passing the Redis client to route factories.
 
 ## Database
 
@@ -77,8 +117,42 @@ Uses `url_service` PostgreSQL database with Prisma ORM.
 
 ### URL Model
 
-- `id` - Primary key
-- `originalUrl` - The full destination URL
-- `shortId` - Generated short identifier (nanoid, 10 chars)
-- `userId` - Owner's user ID
-- `clicks` - Click counter (incremented on each redirect)
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | Int | Primary key |
+| `originalUrl` | String | Destination URL |
+| `shortId` | String (unique) | Auto-generated 10-char nanoid |
+| `customAlias` | String? (unique) | 3-50 chars, `[a-zA-Z0-9_-]` |
+| `redirectType` | Int | 301 or 302 (default 302) |
+| `expiresAt` | DateTime? | Returns 410 after this time |
+| `passwordHash` | String? | bcrypt hash; unlock via POST /:shortId/unlock |
+| `tags` | String[] | Filterable labels |
+| `utmParams` | Json? | Appended to destination URL on redirect |
+| `requireSignature` | Boolean | Default false; enforces HMAC sig on redirect |
+| `clicks` | Int | Incremented on each unique human click |
+| `createdAt` | DateTime | Auto-set |
+| `userId` | Int | Owner's user ID |
+| `previewTitle` | String? | Scraped by preview-service (async) |
+| `previewDescription` | String? | Scraped by preview-service (async) |
+| `previewImageUrl` | String? | Scraped by preview-service (async) |
+| `previewFetchedAt` | DateTime? | When preview metadata was last updated |
+
+## Security Features
+
+- **Domain filter:** `DOMAIN_BLOCKLIST` / `DOMAIN_ALLOWLIST` env vars (comma-separated). Checked at URL creation and update. Returns 422 when blocked.
+- **Safe Browsing:** `SAFE_BROWSING_API_KEY` env var. Calls Google Safe Browsing API v4 at creation/update. Fail-open (no API key or timeout → allowed). Returns 422 when flagged.
+- **Signed URLs:** `URL_SIGNING_SECRET` env var. `POST /urls/:id/sign` generates a `?sig=&exp=` HMAC-SHA256 signed URL. `requireSignature=true` on a URL enforces verification at redirect time (403 if missing/invalid/expired).
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `JWT_SECRET` | Yes | Shared JWT signing secret |
+| `RABBITMQ_URL` | Yes | RabbitMQ connection URL |
+| `BASE_URL` | Yes | Public base URL (e.g. `https://brl.ink`) |
+| `REDIS_URL` | No | Redis connection string (default: `redis://localhost:6379`) |
+| `SAFE_BROWSING_API_KEY` | No | Google Safe Browsing API v4 key |
+| `DOMAIN_BLOCKLIST` | No | Comma-separated blocked domains (e.g. `evil.com,bad.org`) |
+| `DOMAIN_ALLOWLIST` | No | Comma-separated allowed domains (takes precedence over blocklist) |
+| `URL_SIGNING_SECRET` | No | HMAC secret for signed URLs |

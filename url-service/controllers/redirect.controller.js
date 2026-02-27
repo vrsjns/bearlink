@@ -3,6 +3,7 @@ const geoip = require('geoip-lite');
 const QRCode = require('qrcode');
 const { createLogger } = require('shared/utils/logger');
 const { isSafeRedirectUrl } = require('shared/utils/validation');
+const { verifyUrl, SIG_PARAM, EXP_PARAM } = require('../services/signedUrl.service');
 
 const logger = createLogger('url-service');
 
@@ -220,6 +221,20 @@ const createRedirectController = ({ prisma, eventPublisher, baseUrl, redis }) =>
 
       if (url.passwordHash) {
         return res.status(401).json({ error: 'Password required.', requiresPassword: true });
+      }
+
+      if (url.requireSignature) {
+        const secret = process.env.URL_SIGNING_SECRET;
+        if (!secret) {
+          logger.warn('requireSignature set but URL_SIGNING_SECRET not configured', { shortId });
+          return res.status(403).json({ error: 'This link requires a valid signature.' });
+        }
+        const slug = url.customAlias || url.shortId;
+        const baseShortUrl = `${baseUrl}/${slug}`;
+        const result = verifyUrl(baseShortUrl, req.query[SIG_PARAM], req.query[EXP_PARAM], secret);
+        if (!result.valid) {
+          return res.status(403).json({ error: result.reason || 'Invalid or expired signature.' });
+        }
       }
 
       const destination = buildRedirectUrl(url.originalUrl, url.utmParams);

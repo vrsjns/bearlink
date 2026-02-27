@@ -17,6 +17,7 @@ model URL {
   passwordHash       String?
   tags               String[]
   utmParams          Json?
+  requireSignature   Boolean   @default(false)
   clicks             Int       @default(0)
   createdAt          DateTime  @default(now())
   userId             Int

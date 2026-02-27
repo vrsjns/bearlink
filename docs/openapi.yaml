@@ -5,7 +5,7 @@ info:
     REST API specification for BearLink URL shortening service.
 
     For async event documentation, see [AsyncAPI specification](./asyncapi.yaml).
-  version: 1.0.0
+  version: 2.0.0
   contact:
     name: BearLink Team
 
@@ -26,6 +26,8 @@ tags:
     description: Authentication and user management (port 4000)
   - name: urls
     description: URL shortening operations (port 5000)
+  - name: redirect
+    description: Public redirect and link resolution endpoints (port 5000)
   - name: analytics
     description: Event analytics (port 6000)
   - name: notification
@@ -34,7 +36,8 @@ tags:
     description: Health and readiness checks
 
 paths:
-  # Auth Service Endpoints
+  # ─── Auth Service Endpoints ──────────────────────────────────────────────────
+
   /register:
     post:
       tags: [auth]
@@ -305,31 +308,75 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  # URL Service Endpoints
+  # ─── URL Service Endpoints ───────────────────────────────────────────────────
+
   /urls:
     get:
       tags: [urls]
       summary: List user's URLs
-      description: Returns all shortened URLs created by the authenticated user
+      description: Returns paginated shortened URLs created by the authenticated user, with optional filtering.
       operationId: listUrls
       security:
         - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-based)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Items per page (max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+        - name: tag
+          in: query
+          description: Filter by tag
+          schema:
+            type: string
+            example: marketing
+        - name: search
+          in: query
+          description: Search in originalUrl and customAlias (case-insensitive)
+          schema:
+            type: string
+            example: example.com
+        - name: expired
+          in: query
+          description: Filter by expiry status
+          schema:
+            type: string
+            enum: ['true', 'false']
+            example: 'false'
       responses:
         '200':
-          description: List of URLs
+          description: Paginated list of URLs
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Url'
+                $ref: '#/components/schemas/ListUrlsResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
     post:
       tags: [urls]
       summary: Create shortened URL
-      description: Creates a new shortened URL for the authenticated user
+      description: |
+        Creates a new shortened URL for the authenticated user.
+
+        The destination URL is validated against the Google Safe Browsing API (if configured)
+        and domain allowlist/blocklist rules.
+
+        If `requireSignature` is set to `true`, the response also includes a pre-signed
+        `signedUrl` that embeds an expiring HMAC signature. Unsigned requests to this link
+        will be rejected with 403.
       operationId: createUrl
       security:
         - bearerAuth: []
@@ -340,14 +387,60 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateUrlRequest'
       responses:
-        '201':
+        '200':
           description: URL created successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreateUrlResponse'
         '400':
-          description: Invalid URL format
+          description: Validation error (missing fields, invalid format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Custom alias already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: URL rejected by domain filter or Safe Browsing check
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /urls/bulk:
+    post:
+      tags: [urls]
+      summary: Bulk create shortened URLs
+      description: |
+        Creates up to 50 shortened URLs in a single request.
+        Each item is processed independently — if one fails validation or DB insertion,
+        the others still succeed. Returns a `results` array where each entry is either
+        `{ shortUrl }` on success or `{ error }` on failure.
+      operationId: createUrlsBulk
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkCreateUrlRequest'
+      responses:
+        '200':
+          description: Partial or full success — check individual result entries for errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkCreateUrlResponse'
+        '400':
+          description: Top-level validation error (not an array, empty, or exceeds 50)
           content:
             application/json:
               schema:
@@ -359,7 +452,11 @@ paths:
     put:
       tags: [urls]
       summary: Update URL
-      description: Updates the original URL for an existing shortened URL
+      description: |
+        Updates an existing shortened URL. Only the owner can update their URL.
+
+        The new destination URL is validated against the domain filter and Safe Browsing API.
+        Cache entries for this URL are invalidated on success.
       operationId: updateUrl
       security:
         - bearerAuth: []
@@ -379,21 +476,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/Url'
         '400':
-          description: Invalid URL format
+          description: Validation error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Not authorized to update this URL
+        '404':
+          description: URL not found or not owned by user
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '404':
-          description: URL not found
+        '409':
+          description: Custom alias already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: URL rejected by domain filter or Safe Browsing check
           content:
             application/json:
               schema:
@@ -402,7 +505,7 @@ paths:
     delete:
       tags: [urls]
       summary: Delete URL
-      description: Deletes a shortened URL
+      description: Permanently deletes a shortened URL. Cache entries are invalidated on success.
       operationId: deleteUrl
       security:
         - bearerAuth: []
@@ -413,54 +516,264 @@ paths:
           description: URL deleted successfully
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Not authorized to delete this URL
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         '404':
-          description: URL not found
+          description: URL not found or not owned by user
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /urls/{id}/sign:
+    post:
+      tags: [urls]
+      summary: Generate a signed URL
+      description: |
+        Creates a time-limited, HMAC-signed version of the short URL.
+        The signed URL includes `?exp=<unix-timestamp>&sig=<hmac-sha256>` query parameters.
+
+        Requires `URL_SIGNING_SECRET` to be configured on the server.
+        Signed URLs are useful for distributing links that expire automatically
+        or that you want to prevent from being shared beyond the intended recipient.
+      operationId: signUrl
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/urlId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUrlRequest'
+      responses:
+        '200':
+          description: Signed URL generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignUrlResponse'
+        '400':
+          description: Invalid URL ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: URL not found or not owned by user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: URL signing not configured (missing URL_SIGNING_SECRET)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── Public Redirect Endpoints ───────────────────────────────────────────────
+
   /{shortId}:
     get:
-      tags: [urls]
+      tags: [redirect]
       summary: Redirect to original URL
       description: |
-        Redirects to the original URL associated with the short ID.
-        Increments the click counter and publishes a url_clicked event.
+        Resolves a short ID or custom alias and redirects to the original URL.
+
+        **Click tracking:** Human clicks are deduplicated per IP per hour using Redis.
+        Bot requests (detected by User-Agent) are redirected but not counted.
+
+        **Preview mode:** Add `?preview=1` to show an HTML bounce page with link metadata
+        instead of redirecting. No click is counted in preview mode.
+
+        **Signed URLs:** If the link has `requireSignature=true`, the request must include
+        valid `?sig=<hmac>&exp=<unix>` parameters (obtained via `POST /urls/:id/sign`).
+
+        **Caching:** URL lookups are served from Redis (60s TTL) when available.
       operationId: redirectUrl
       parameters:
         - name: shortId
           in: path
           required: true
-          description: The 10-character short identifier
+          description: The 10-character short identifier or custom alias (3-50 chars)
           schema:
             type: string
-            minLength: 10
-            maxLength: 10
             example: abc123xyz9
+        - name: preview
+          in: query
+          description: Set to "1" to show an HTML preview page instead of redirecting
+          schema:
+            type: string
+            enum: ['1']
+        - name: sig
+          in: query
+          description: HMAC-SHA256 signature (required when link has requireSignature=true)
+          schema:
+            type: string
+            example: a3f9c2e1b8d4...
+        - name: exp
+          in: query
+          description: Signature expiry as Unix timestamp (required with sig)
+          schema:
+            type: integer
+            example: 1740700000
       responses:
-        '302':
-          description: Redirect to original URL
+        '200':
+          description: HTML preview page (only when ?preview=1)
+          content:
+            text/html:
+              schema:
+                type: string
+        '301':
+          description: Permanent redirect to original URL
           headers:
             Location:
-              description: The original URL
+              description: The original URL (with UTM params appended if configured)
               schema:
                 type: string
                 format: uri
+        '302':
+          description: Temporary redirect to original URL
+          headers:
+            Location:
+              description: The original URL (with UTM params appended if configured)
+              schema:
+                type: string
+                format: uri
+        '400':
+          description: URL is unsafe (blocked by isSafeRedirectUrl check)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Link is password-protected — submit password via POST /:shortId/unlock
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      requiresPassword:
+                        type: boolean
+                        example: true
+        '403':
+          description: Invalid, tampered, or expired HMAC signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Short URL not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '410':
+          description: Link has expired (expiresAt is in the past)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
-  # Analytics Service Endpoints
+  /{shortId}/qr:
+    get:
+      tags: [redirect]
+      summary: Generate QR code for a short link
+      description: |
+        Returns a PNG QR code image encoding the full short URL.
+        The QR code points to the short URL (not the original URL).
+        Returns 410 if the link has already expired.
+      operationId: getQrCode
+      parameters:
+        - name: shortId
+          in: path
+          required: true
+          description: The short identifier or custom alias
+          schema:
+            type: string
+            example: abc123xyz9
+      responses:
+        '200':
+          description: PNG QR code image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Short URL not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: Link has expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /{shortId}/unlock:
+    post:
+      tags: [redirect]
+      summary: Unlock a password-protected link
+      description: |
+        Verifies the password for a protected link and redirects to the original URL.
+        On success, a `url_clicked` event is published and the click counter is incremented.
+      operationId: unlockUrl
+      parameters:
+        - name: shortId
+          in: path
+          required: true
+          description: The short identifier or custom alias
+          schema:
+            type: string
+            example: abc123xyz9
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlockRequest'
+      responses:
+        '302':
+          description: Password correct — redirect to original URL
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        '400':
+          description: Missing password or link is not password-protected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Incorrect password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Short URL not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: Link has expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── Analytics Service Endpoints ─────────────────────────────────────────────
+
   /events:
     get:
       tags: [analytics]
@@ -477,7 +790,8 @@ paths:
                 items:
                   $ref: '#/components/schemas/Event'
 
-  # Health Endpoints (all services)
+  # ─── Health Endpoints (all services) ─────────────────────────────────────────
+
   /health:
     get:
       tags: [health]
@@ -498,7 +812,11 @@ paths:
       summary: Readiness check
       description: |
         Returns 200 if the service is ready to accept requests.
-        Checks database and RabbitMQ connectivity (varies by service).
+        Checked dependencies vary by service:
+        - **url-service:** database, rabbitmq, redis (non-fatal if Redis is down)
+        - **auth-service:** database, rabbitmq
+        - **analytics-service:** database, rabbitmq
+        - **notification-service:** database, smtp
       operationId: readinessCheck
       responses:
         '200':
@@ -557,6 +875,9 @@ components:
             $ref: '#/components/schemas/Error'
 
   schemas:
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+
     RegisterRequest:
       type: object
       required:
@@ -613,8 +934,8 @@ components:
           example: John Doe
         role:
           type: string
-          enum: [user, admin]
-          example: user
+          enum: [USER, ADMIN]
+          example: USER
         createdAt:
           type: string
           format: date-time
@@ -665,6 +986,8 @@ components:
           description: New password (min 8 chars, uppercase, lowercase, number)
           example: NewPassword456
 
+    # ── URL management ────────────────────────────────────────────────────────
+
     CreateUrlRequest:
       type: object
       required:
@@ -675,6 +998,59 @@ components:
           format: uri
           description: The URL to shorten (must be http or https)
           example: https://example.com/very/long/path
+        redirectType:
+          type: integer
+          enum: [301, 302]
+          default: 302
+          description: HTTP redirect type (301 = permanent, 302 = temporary)
+          example: 302
+        customAlias:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]{3,50}$'
+          description: Custom slug to use instead of a generated short ID
+          example: my-campaign
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the link expires (must be in the future)
+          example: '2027-01-01T00:00:00.000Z'
+        password:
+          type: string
+          description: Protect the link with a password (stored as bcrypt hash)
+          example: secret123
+        tags:
+          type: array
+          items:
+            type: string
+          description: Arbitrary string tags for filtering and organisation
+          example: [marketing, q1]
+        utmParams:
+          type: object
+          description: |
+            UTM parameters to append to the destination URL on redirect.
+            All values must be strings or numbers.
+          additionalProperties:
+            type: string
+          example:
+            utm_source: newsletter
+            utm_medium: email
+            utm_campaign: spring-sale
+        requireSignature:
+          type: boolean
+          default: false
+          description: |
+            If true, redirect requests must include a valid HMAC signature
+            (obtained from POST /urls/:id/sign or returned in the creation response).
+          example: false
+        signedTtl:
+          type: integer
+          minimum: 1
+          description: |
+            Validity window in seconds for the initial signed URL returned in the response
+            (only relevant when requireSignature=true). Defaults to 3600 (1 hour).
+          example: 86400
 
     UpdateUrlRequest:
       type: object
@@ -684,8 +1060,85 @@ components:
         originalUrl:
           type: string
           format: uri
-          description: The new destination URL
+          description: New destination URL
           example: https://example.com/updated/path
+        redirectType:
+          type: integer
+          enum: [301, 302]
+          description: HTTP redirect type
+          example: 302
+        customAlias:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]{3,50}$'
+          nullable: true
+          description: New custom alias, or null to remove the existing alias
+          example: new-alias
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: New expiry (must be in the future), or null to remove expiry
+          example: '2027-06-01T00:00:00.000Z'
+        password:
+          type: string
+          nullable: true
+          description: New password, or null to remove password protection
+          example: newpassword
+        tags:
+          type: array
+          items:
+            type: string
+          description: Replace all tags with this list
+          example: [social, organic]
+        utmParams:
+          type: object
+          nullable: true
+          description: Replace UTM params with this object, or null to remove them
+          additionalProperties:
+            type: string
+          example:
+            utm_source: twitter
+        requireSignature:
+          type: boolean
+          description: Enable or disable signature enforcement
+          example: true
+
+    BulkCreateUrlRequest:
+      type: object
+      required:
+        - urls
+      properties:
+        urls:
+          type: array
+          minItems: 1
+          maxItems: 50
+          description: Array of URL creation requests (max 50)
+          items:
+            $ref: '#/components/schemas/CreateUrlRequest'
+
+    BulkCreateUrlResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          description: |
+            One entry per input item. Each entry is either a success
+            `{ shortUrl }` or a failure `{ error }`.
+          items:
+            oneOf:
+              - type: object
+                properties:
+                  shortUrl:
+                    type: string
+                    format: uri
+                    example: http://localhost:5000/abc123xyz9
+              - type: object
+                properties:
+                  error:
+                    type: string
+                    example: Custom alias is already taken.
 
     CreateUrlResponse:
       type: object
@@ -695,9 +1148,45 @@ components:
           format: uri
           description: The full shortened URL
           example: http://localhost:5000/abc123xyz9
+        signedUrl:
+          type: string
+          format: uri
+          description: |
+            Pre-signed URL with HMAC signature appended (only present when
+            requireSignature=true and URL_SIGNING_SECRET is configured).
+          example: http://localhost:5000/abc123xyz9?exp=1740700000&sig=a3f9c2...
+
+    SignUrlRequest:
+      type: object
+      properties:
+        ttl:
+          type: integer
+          minimum: 1
+          description: Validity window in seconds (default 3600)
+          example: 86400
+
+    SignUrlResponse:
+      type: object
+      properties:
+        signedUrl:
+          type: string
+          format: uri
+          description: The signed URL with ?exp and ?sig query parameters appended
+          example: http://localhost:5000/abc123xyz9?exp=1740786400&sig=7b2e41...
+
+    UnlockRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          description: The password to verify
+          example: secret123
 
     Url:
       type: object
+      description: A shortened URL record
       properties:
         id:
           type: integer
@@ -708,9 +1197,39 @@ components:
           example: https://example.com/very/long/path
         shortId:
           type: string
-          minLength: 10
-          maxLength: 10
+          description: Auto-generated 10-character identifier
           example: abc123xyz9
+        customAlias:
+          type: string
+          nullable: true
+          description: Custom slug (3-50 chars, alphanumeric + hyphen + underscore)
+          example: my-campaign
+        redirectType:
+          type: integer
+          enum: [301, 302]
+          example: 302
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2027-01-01T00:00:00.000Z'
+        tags:
+          type: array
+          items:
+            type: string
+          example: [marketing, q1]
+        utmParams:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+          example:
+            utm_source: newsletter
+            utm_medium: email
+        requireSignature:
+          type: boolean
+          default: false
+          example: false
         clicks:
           type: integer
           minimum: 0
@@ -722,6 +1241,52 @@ components:
           type: string
           format: date-time
           example: '2024-01-15T10:30:00.000Z'
+        previewTitle:
+          type: string
+          nullable: true
+          description: Page title scraped by preview-service (async)
+          example: Example Domain
+        previewDescription:
+          type: string
+          nullable: true
+          description: Meta description scraped by preview-service (async)
+          example: This domain is for use in illustrative examples.
+        previewImageUrl:
+          type: string
+          nullable: true
+          description: OG image URL scraped by preview-service (async)
+          example: https://example.com/og-image.png
+        previewFetchedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the preview metadata was last fetched
+          example: '2024-01-15T10:31:00.000Z'
+
+    ListUrlsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Url'
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+            total:
+              type: integer
+              example: 87
+            pages:
+              type: integer
+              example: 5
+
+    # ── Analytics ─────────────────────────────────────────────────────────────
 
     Event:
       type: object
@@ -731,7 +1296,7 @@ components:
           example: 1
         type:
           type: string
-          enum: [user_registered, url_created, url_clicked]
+          enum: [user_registered, url_created, url_updated, url_deleted, url_clicked]
           example: url_clicked
         payload:
           type: object
@@ -740,6 +1305,8 @@ components:
           type: string
           format: date-time
           example: '2024-01-15T10:30:00.000Z'
+
+    # ── Health ────────────────────────────────────────────────────────────────
 
     HealthResponse:
       type: object
@@ -765,15 +1332,21 @@ components:
             rabbitmq:
               type: string
               enum: [ok, error]
+            redis:
+              type: string
+              enum: [ok, error]
+              description: Present in url-service (non-fatal — service starts without Redis)
             smtp:
               type: string
               enum: [ok, error]
               description: Only present in notification-service
+
+    # ── Shared ────────────────────────────────────────────────────────────────
 
     Error:
       type: object
       properties:
         error:
           type: string
-          description: Error message
+          description: Human-readable error message
           example: Invalid credentials

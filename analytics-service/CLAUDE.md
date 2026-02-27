@@ -45,12 +45,15 @@ This service **consumes** events from RabbitMQ. It does not publish events.
 
 ### Events Consumed
 
-Consumes **all** domain events from the `events` queue:
-- `user_registered` - From auth-service
-- `url_created` - From url-service
-- `url_clicked` - From url-service
+Consumes **all** domain events from the `events` queue and stores them as audit log entries:
 
-All events are stored in the database as audit log entries.
+| Event | Publisher | Payload highlights |
+|-------|-----------|--------------------|
+| `user_registered` | auth-service | id, email, name, role, createdAt |
+| `url_created` | url-service | id, originalUrl, shortId, customAlias, tags, utmParams, requireSignature, userId |
+| `url_updated` | url-service | Full updated URL record |
+| `url_deleted` | url-service | id, originalUrl, shortId, userId |
+| `url_clicked` | url-service | shortId, originalUrl, referer, userAgent, country |
 
 ### Code Pattern
 
@@ -71,6 +74,6 @@ Uses `analytics_service` PostgreSQL database with Prisma ORM.
 ### Event Model
 
 - `id` - Primary key
-- `type` - Event type string (e.g., `user_registered`)
-- `payload` - JSON payload from the event
+- `type` - Event type string (e.g., `url_clicked`)
+- `payload` - Full JSON payload from the event
 - `createdAt` - Timestamp when event was stored

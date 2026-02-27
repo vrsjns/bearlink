@@ -3,9 +3,11 @@
 Breaking down 22 improvement ideas into 6 independently-implementable parts.
 Each part has a clear scope, no partial-feature sprawl, and can be reviewed as a single PR.
 
+> **Status: All 6 parts implemented ✅**
+
 ---
 
-## Part 1 — Code Cleanup
+## Part 1 — Code Cleanup ✅
 > No schema changes. No new infrastructure. Pure code fixes.
 
 | # | What | Why |
@@ -19,14 +21,14 @@ Each part has a clear scope, no partial-feature sprawl, and can be reviewed as a
 
 ---
 
-## Part 2 — Link Feature Extensions
+## Part 2 — Link Feature Extensions ✅
 > Schema migration required. Builds on Part 1 (uses the new event types).
 
 | # | What | Why |
 |---|------|-----|
 | 5 | Custom aliases (`customAlias String? @unique`) | Vanity URLs: `bear.lnk/my-promo` instead of random nanoid |
 | 6 | Link expiration (`expiresAt DateTime?`) | Auto-expire links; redirect returns `410 Gone` after expiry |
-| 7 | Password protection (`passwordHash String?`) | Private links; redirect returns `401`, client POSTs password to get a signed short-lived token |
+| 7 | Password protection (`passwordHash String?`) | Private links; redirect returns `401`, client POSTs password to `POST /:shortId/unlock` |
 | 8 | Tags / labels (`tags String[]`) | Organize links; filterable in the UI via `?tag=campaign-2026` |
 
 **Migration:** single `ALTER TABLE` adding 4 nullable columns.
@@ -34,7 +36,7 @@ Each part has a clear scope, no partial-feature sprawl, and can be reviewed as a
 
 ---
 
-## Part 3 — Analytics Enrichment
+## Part 3 — Analytics Enrichment ✅
 > Richer event payloads and smarter click tracking. No new infra.
 
 | # | What | Why |
@@ -44,64 +46,61 @@ Each part has a clear scope, no partial-feature sprawl, and can be reviewed as a
 | 11 | Pagination on `GET /urls` (`?page=&limit=`) | Currently returns all rows; breaks down at hundreds of links |
 | 12 | Filtering on `GET /urls` (`?tag=`, `?search=`, `?expired=true`) | Follows naturally from tags (Part 2) and expiration (Part 2) |
 
-**Note:** Country lookup needs a lightweight GeoIP package (`geoip-lite`, ~30MB DB bundled).
+**Note:** Country lookup uses `geoip-lite` (~30MB DB bundled).
 **Files touched:** `controllers/redirect.controller.js`, `controllers/urls.controller.js`, `shared/events/publisher.js`
 
 ---
 
-## Part 4 — New Endpoints
+## Part 4 — New Endpoints ✅
 > Self-contained new features. Each can be shipped independently.
 
-### 4a — QR Code endpoint
+### 4a — QR Code endpoint ✅
 `GET /:shortId/qr` — returns a PNG QR code for the short URL on the fly.
 Package: `qrcode` (npm). Zero infra needed, stateless.
 
-### 4b — Bulk creation
-`POST /urls/bulk` — accepts `{ urls: [{ originalUrl, customAlias?, tags? }] }`, returns array of results.
-Useful for importers, scripts, admin tooling.
+### 4b — Bulk creation ✅
+`POST /urls/bulk` — accepts `{ urls: [...] }`, returns array of results (partial-success).
+Useful for importers, scripts, admin tooling. Max 50 items per request.
 
-### 4c — UTM injection
-Let users attach default UTM params at creation time (`utm_source`, `utm_campaign`, etc.).
-On redirect, append them to the destination URL automatically.
-Stored as `utmParams Json?` on the URL model.
+### 4c — UTM injection ✅
+Users attach default UTM params at creation time. On redirect, appended to the destination URL automatically. Stored as `utmParams Json?` on the URL model.
 
-### 4d — Safe bounce page
-`GET /:shortId?preview=1` — instead of redirecting, renders a branded intermediate page showing the destination and OG preview metadata (already stored in the DB). Lets users verify where they're going before being sent.
+### 4d — Safe bounce page ✅
+`GET /:shortId?preview=1` — instead of redirecting, renders a branded intermediate page showing the destination and OG preview metadata. No click is counted in preview mode.
 
-**Files touched (per sub-feature):** new routes, controllers; `prisma/schema.prisma` for 4c.
+**Files touched:** new routes, controllers; `prisma/schema.prisma` for 4c.
 
 ---
 
-## Part 5 — Performance Layer (Redis)
-> Requires adding Redis to docker-compose and k8s manifests. Do this as one cohesive PR.
+## Part 5 — Performance Layer (Redis) ✅
+> Requires adding Redis to docker-compose and k8s manifests.
 
 | # | What | Why |
 |---|------|-----|
-| 13 | Redis cache for redirect lookups | Every `GET /:shortId` currently hits Postgres; cache with a short TTL (e.g. 60s), invalidate on update/delete |
-| 14 | Redis-backed rate limiting | `express-rate-limit` default store is in-memory per-process; doesn't work across multiple instances |
-| 15 | Click deduplication via Redis | A Redis set keyed by `shortId:ip:hour` prevents one user from inflating click counts; TTL auto-expires the set |
+| 13 | Redis cache for redirect lookups | Every `GET /:shortId` currently hits Postgres; cache with 60s TTL, invalidate on update/delete |
+| 14 | Redis-backed rate limiters | `createRedisRateLimiters` factory available in `services/rateLimiters.js` |
+| 15 | Click deduplication via Redis | `dedup:{shortId}:{ip}:{hour}` key with SET NX prevents one IP from inflating click counts |
 
-**Infrastructure:** add `redis` service to `docker-compose.yml` and a `redis` Deployment + Service to `k8s/`.
-**Package:** `ioredis`, `rate-limit-redis`
-**Files touched:** `index.js` (Redis init), `controllers/redirect.controller.js`, `shared/middlewares/rateLimit.js`
+**Infrastructure:** `redis` service added to `docker-compose.yml`; `redis/deployment.yaml` + `redis/service.yaml` added to `k8s/`.
+**Packages:** `ioredis`, `rate-limit-redis`
+**Files touched:** `index.js` (Redis init), `controllers/redirect.controller.js`, `services/rateLimiters.js`
 
 ---
 
-## Part 6 — Security Hardening
-> External API integrations and access control. Requires API keys for some items.
+## Part 6 — Security Hardening ✅
+> External API integrations and access control.
 
 | # | What | Why |
 |---|------|-----|
-| 16 | Google Safe Browsing API check at creation time | Reject known phishing/malware URLs at the source; `isSafeRedirectUrl` currently only validates format |
-| 17 | Domain allowlist / blocklist (admin-configurable) | Prevents the service becoming a redirect proxy for bad actors; stored in DB or env config |
-| 18 | Signed short URLs with expiry (HMAC) | For sensitive use cases (password resets, file download tokens); validates HMAC signature on redirect |
+| 16 | Google Safe Browsing API check at creation time | Reject known phishing/malware URLs at the source; fail-open if key missing or API times out |
+| 17 | Domain allowlist / blocklist via env config | Prevents the service becoming a redirect proxy for bad actors; `DOMAIN_BLOCKLIST` / `DOMAIN_ALLOWLIST` env vars |
+| 18 | Signed short URLs with expiry (HMAC-SHA256) | `requireSignature Boolean` field; `POST /urls/:id/sign`; redirect verifies `?sig=&exp=` with constant-time compare |
 
-**Note:** Part 6 items are independent of each other — they can be PRs in any order.
-**Files touched:** `controllers/urls.controller.js`, `controllers/redirect.controller.js`, new `services/safeBrowsing.service.js`
+**Files touched:** `controllers/urls.controller.js`, `controllers/redirect.controller.js`, `routes/urls.routes.js`, `services/safeBrowsing.service.js`, `services/domainFilter.service.js`, `services/signedUrl.service.js`, `prisma/schema.prisma` + migration
 
 ---
 
-## Suggested Implementation Order
+## Suggested Implementation Order (retrospective)
 
 ```
 Part 1  →  Part 2  →  Part 3

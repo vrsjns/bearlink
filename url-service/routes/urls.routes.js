@@ -21,6 +21,7 @@ const createUrlsRoutes = ({ prisma, eventPublisher, baseUrl, publishPreviewJob, 
   router.post('/urls', authenticateJWT, apiLimiter, controller.createUrl);
   router.put('/urls/:id', authenticateJWT, apiLimiter, controller.updateUrl);
   router.delete('/urls/:id', authenticateJWT, apiLimiter, controller.deleteUrl);
+  router.post('/urls/:id/sign', authenticateJWT, apiLimiter, controller.signUrlEndpoint);
 
   return router;
 };
