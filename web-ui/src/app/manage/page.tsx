@@ -84,14 +84,14 @@ const ManageURLs = () => {
                 {urls.length === 0 ? (
                     <p>No URLs found.</p>
                 ) : (
-                    <table className="w-full table-auto">
+                    <table className="w-full table-fixed">
                         <thead>
                             <tr>
                                 <th className="px-4 py-2 w-16"></th>
-                                <th className="px-4 py-2">Short URL</th>
+                                <th className="px-4 py-2 w-28">Short URL</th>
                                 <th className="px-4 py-2">Original URL</th>
-                                <th className="px-4 py-2">Clicks</th>
-                                <th className="px-4 py-2">Actions</th>
+                                <th className="px-4 py-2 w-16">Clicks</th>
+                                <th className="px-4 py-2 w-36">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -127,7 +127,7 @@ const ManageURLs = () => {
                                                     <div className="text-sm font-medium text-gray-700 mt-1 truncate">{url.previewTitle}</div>
                                                 )}
                                                 {url.previewDescription && (
-                                                    <div className="text-xs text-gray-500 mt-0.5 truncate">{url.previewDescription}</div>
+                                                    <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">{url.previewDescription}</div>
                                                 )}
                                                 {!url.previewFetchedAt && (
                                                     <div className="text-xs text-gray-400 italic mt-0.5">Preview loading...</div>
