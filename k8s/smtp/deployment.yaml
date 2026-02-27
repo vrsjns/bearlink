@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smtp
+  namespace: bearlink
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: smtp
+  template:
+    metadata:
+      labels:
+        app: smtp
+    spec:
+      containers:
+        - name: smtp
+          image: boky/postfix:latest
+          ports:
+            - containerPort: 25
+          env:
+            # Construct RELAYHOST from individual secret keys.
+            # boky/postfix expects: RELAYHOST=[hostname]:port
+            - name: SMTP_RELAY_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: bearlink-secrets
+                  key: SMTP_HOST
+            - name: SMTP_RELAY_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: bearlink-secrets
+                  key: SMTP_PORT
+            - name: RELAYHOST
+              value: "[$(SMTP_RELAY_HOST)]:$(SMTP_RELAY_PORT)"
+            - name: RELAYHOST_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: bearlink-secrets
+                  key: EMAIL_USER
+            - name: RELAYHOST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bearlink-secrets
+                  key: EMAIL_PASS
+            # Accept mail from any pod in the cluster
+            - name: MYNETWORKS
+              value: "10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "25m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

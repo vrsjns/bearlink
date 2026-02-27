@@ -1,0 +1,227 @@
+# Traefik Ingress — k3s ships Traefik as the default IngressController.
+# Replace "bearlink.example.com" with your actual domain.
+#
+# Each route that requires prefix stripping gets its own Ingress object so that
+# Traefik can attach a per-route middleware (Traefik applies middleware at the
+# IngressRoute level, which corresponds 1:1 to a Kubernetes Ingress object).
+#
+# Routes without prefix stripping (web-ui, /s short URLs) share a single Ingress.
+---
+# ── Middleware definitions ────────────────────────────────────────────────────
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-api-auth
+  namespace: bearlink
+spec:
+  stripPrefix:
+    prefixes: [/api/auth]
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-api-urls
+  namespace: bearlink
+spec:
+  stripPrefix:
+    prefixes: [/api/urls]
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-api-analytics
+  namespace: bearlink
+spec:
+  stripPrefix:
+    prefixes: [/api/analytics]
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-api-preview
+  namespace: bearlink
+spec:
+  stripPrefix:
+    prefixes: [/api/preview]
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-grafana
+  namespace: bearlink
+spec:
+  stripPrefix:
+    prefixes: [/grafana]
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-rabbitmq
+  namespace: bearlink
+spec:
+  stripPrefix:
+    prefixes: [/rabbitmq]
+---
+# ── auth-service: /api/auth/* → auth-service:4000 ────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auth-service
+  namespace: bearlink
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: bearlink-strip-api-auth@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bearlink.example.com
+      http:
+        paths:
+          - path: /api/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-service
+                port:
+                  number: 4000
+---
+# ── url-service: /api/urls/* → url-service:5000 ──────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: url-service
+  namespace: bearlink
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: bearlink-strip-api-urls@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bearlink.example.com
+      http:
+        paths:
+          - path: /api/urls
+            pathType: Prefix
+            backend:
+              service:
+                name: url-service
+                port:
+                  number: 5000
+---
+# ── analytics-service: /api/analytics/* → analytics-service:6000 ─────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: analytics-service
+  namespace: bearlink
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: bearlink-strip-api-analytics@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bearlink.example.com
+      http:
+        paths:
+          - path: /api/analytics
+            pathType: Prefix
+            backend:
+              service:
+                name: analytics-service
+                port:
+                  number: 6000
+---
+# ── preview-service: /api/preview/* → preview-service:8000 ───────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: preview-service
+  namespace: bearlink
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: bearlink-strip-api-preview@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bearlink.example.com
+      http:
+        paths:
+          - path: /api/preview
+            pathType: Prefix
+            backend:
+              service:
+                name: preview-service
+                port:
+                  number: 8000
+---
+# ── Grafana: /grafana/* → grafana:3000 ───────────────────────────────────────
+# Note: Grafana must also be configured with GF_SERVER_ROOT_URL and
+# GF_SERVER_SERVE_FROM_SUB_PATH=true (already set in grafana.yaml).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: bearlink
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: bearlink-strip-grafana@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bearlink.example.com
+      http:
+        paths:
+          - path: /grafana
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+---
+# ── RabbitMQ management UI: /rabbitmq/* → rabbitmq:15672 ─────────────────────
+# WARNING: Restrict access in production (IP allowlist or VPN).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rabbitmq
+  namespace: bearlink
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: bearlink-strip-rabbitmq@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bearlink.example.com
+      http:
+        paths:
+          - path: /rabbitmq
+            pathType: Prefix
+            backend:
+              service:
+                name: rabbitmq
+                port:
+                  number: 15672
+---
+# ── web-ui + short URL redirects (no prefix stripping) ───────────────────────
+# /s/* passes through as-is; url-service handles the short-code redirect.
+# / catch-all routes to Next.js.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-ui
+  namespace: bearlink
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bearlink.example.com
+      http:
+        paths:
+          - path: /s
+            pathType: Prefix
+            backend:
+              service:
+                name: url-service
+                port:
+                  number: 5000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-ui
+                port:
+                  number: 3000

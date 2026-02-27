@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: bearlink
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: notification-service
+          image: notification-service:latest
+          ports:
+            - containerPort: 7000
+          env:
+            # Points to the in-cluster Postfix relay — not the upstream SMTP server
+            - name: SMTP_HOST
+              value: smtp
+            - name: SMTP_PORT
+              value: "25"
+            - name: EMAIL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: bearlink-secrets
+                  key: EMAIL_USER
+            - name: EMAIL_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: bearlink-secrets
+                  key: EMAIL_PASS
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: bearlink-secrets
+                  key: RABBITMQ_URL
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 7000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 7000
+            initialDelaySeconds: 30
+            periodSeconds: 15

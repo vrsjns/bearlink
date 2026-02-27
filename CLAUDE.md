@@ -38,6 +38,22 @@ npm run build               # Production build
 npm run lint                # ESLint
 ```
 
+Preview service (Python):
+```bash
+cd preview-service
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+pytest                      # Run tests
+```
+
+### Kubernetes (k3s)
+```bash
+kubectl kustomize k8s/                    # Preview rendered manifests
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -k k8s/                     # Apply all manifests via Kustomize
+kubectl get pods -n bearlink
+```
+
 ## Architecture
 
 ### Services
@@ -48,6 +64,7 @@ npm run lint                # ESLint
 | url-service | 5000 | url_service | URL shortening, redirection, click tracking |
 | analytics-service | 6000 | analytics_service | Event storage and retrieval |
 | notification-service | 7000 | - | Email delivery via SMTP |
+| preview-service | 8000 | - | Link metadata scraping (Python/FastAPI/BeautifulSoup) |
 | web-ui | 3000 | - | Next.js frontend |
 
 Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (1025/8025)
@@ -55,6 +72,8 @@ Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (10
 ### Message Queues (RabbitMQ)
 - `events` - Domain events (user_registered, url_created, url_clicked)
 - `email_notifications` - Email delivery payloads
+- `preview_requested` - url-service → preview-service (trigger async metadata scrape)
+- `preview_ready` - preview-service → url-service (scraped metadata result)
 
 ### Shared Code (`/shared`)
 - `utils/logger.js` - Winston logger (console + file)
@@ -69,9 +88,12 @@ Services communicate via RabbitMQ using the shared events module (`shared/events
 | Service | Role | Events |
 |---------|------|--------|
 | auth-service | Publisher | `user_registered`, email notifications |
-| url-service | Publisher | `url_created`, `url_clicked` |
+| url-service | Publisher | `url_created`, `url_clicked`, `preview_requested` |
+| url-service | Consumer | `preview_ready` |
 | analytics-service | Consumer | All domain events |
 | notification-service | Consumer | Email notifications |
+| preview-service | Consumer | `preview_requested` |
+| preview-service | Publisher | `preview_ready` |
 
 See each service's `CLAUDE.md` for implementation details.
 
@@ -79,6 +101,15 @@ See each service's `CLAUDE.md` for implementation details.
 
 - **REST API:** `docs/openapi.yaml` - OpenAPI 3.0 specification for all service endpoints
 - **Async Events:** `docs/asyncapi.yaml` - AsyncAPI specification for RabbitMQ events
+
+### Kubernetes Manifests (`k8s/`)
+
+Production manifests for k3s deployment. All resources live in the `bearlink` namespace.
+
+- `k8s/kustomization.yaml` — Kustomize overlay; maps short image names to `ghcr.io/vrsjns/*`
+- `k8s/namespace.yaml` + `k8s/secrets.yaml` — applied before Kustomize (secrets use placeholder values replaced at deploy time via Ansible Vault)
+- Apply: `kubectl apply -f k8s/namespace.yaml && kubectl apply -k k8s/`
+- Cluster provisioning: see [bearlink-infra](https://github.com/vrsjns/bearlink-infra) (Terraform + Ansible)
 
 ## Key Patterns
 
