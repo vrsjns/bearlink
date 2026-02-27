@@ -1,8 +1,28 @@
 const bcrypt = require('bcryptjs');
+const geoip = require('geoip-lite');
 const { createLogger } = require('shared/utils/logger');
 const { isSafeRedirectUrl } = require('shared/utils/validation');
 
 const logger = createLogger('url-service');
+
+// Known bot / crawler user-agent patterns — still redirect, but don't count clicks
+const BOT_PATTERN =
+  /bot|crawl|spider|slurp|google|bingbot|duckduck|baidu|yandex|slackbot|twitterbot|facebookexternalhit|linkedinbot|whatsapp|telegram|curl|wget|python-requests|go-http-client/i;
+
+const isBot = (ua) => !ua || BOT_PATTERN.test(ua);
+
+/**
+ * Extract click metadata from the request for analytics.
+ */
+const extractClickMetadata = (req) => {
+  const userAgent = req.headers['user-agent'] || null;
+  const referer = req.headers['referer'] || req.headers['referrer'] || null;
+  const ip =
+    (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '';
+  const geo = geoip.lookup(ip);
+  const country = geo?.country || null;
+  return { userAgent, referer, country };
+};
 
 /**
  * Look up a URL by shortId OR customAlias
@@ -41,12 +61,24 @@ const createRedirectController = ({ prisma, eventPublisher }) => {
         return res.status(401).json({ error: 'Password required.', requiresPassword: true });
       }
 
-      await prisma.uRL.update({
-        where: { shortId: url.shortId },
-        data: { clicks: { increment: 1 } },
-      });
+      const { userAgent, referer, country } = extractClickMetadata(req);
 
-      eventPublisher.publishUrlClicked({ shortId: url.shortId, originalUrl: url.originalUrl });
+      if (!isBot(userAgent)) {
+        await prisma.uRL.update({
+          where: { shortId: url.shortId },
+          data: { clicks: { increment: 1 } },
+        });
+
+        eventPublisher.publishUrlClicked({
+          shortId: url.shortId,
+          originalUrl: url.originalUrl,
+          referer,
+          userAgent,
+          country,
+        });
+      } else {
+        logger.info('Bot redirect — click not counted', { userAgent, shortId: url.shortId });
+      }
 
       res.redirect(url.redirectType, url.originalUrl);
     } catch (error) {
@@ -88,12 +120,20 @@ const createRedirectController = ({ prisma, eventPublisher }) => {
         return res.status(401).json({ error: 'Incorrect password.' });
       }
 
+      const { userAgent, referer, country } = extractClickMetadata(req);
+
       await prisma.uRL.update({
         where: { shortId: url.shortId },
         data: { clicks: { increment: 1 } },
       });
 
-      eventPublisher.publishUrlClicked({ shortId: url.shortId, originalUrl: url.originalUrl });
+      eventPublisher.publishUrlClicked({
+        shortId: url.shortId,
+        originalUrl: url.originalUrl,
+        referer,
+        userAgent,
+        country,
+      });
 
       res.redirect(url.redirectType, url.originalUrl);
     } catch (error) {

@@ -44,35 +44,149 @@ describe('URLs Routes', () => {
   // ─── GET /urls ────────────────────────────────────────────────────────────
 
   describe('GET /urls', () => {
-    it('should return list of URLs for authenticated user', async () => {
-      const token = generateTestToken(regularUser);
-      const urls = [makeUrl({ id: 1 }), makeUrl({ id: 2, shortId: 'xyz9876543' })];
-      mockPrismaURL.findMany.mockResolvedValue(urls);
-
-      const response = await request(app)
-        .get('/urls')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200);
-
-      expect(response.body).toHaveLength(2);
+    beforeEach(() => {
+      mockPrismaURL.count.mockResolvedValue(0);
     });
 
-    it('should query URLs filtered by userId from token', async () => {
-      const token = generateTestToken(regularUser);
-      mockPrismaURL.findMany.mockResolvedValue([]);
+    describe('paginated response shape', () => {
+      it('should return data array and pagination object', async () => {
+        const token = generateTestToken(regularUser);
+        const urls = [makeUrl({ id: 1 }), makeUrl({ id: 2, shortId: 'xyz9876543' })];
+        mockPrismaURL.findMany.mockResolvedValue(urls);
+        mockPrismaURL.count.mockResolvedValue(2);
 
-      await request(app).get('/urls').set('Authorization', `Bearer ${token}`).expect(200);
+        const response = await request(app)
+          .get('/urls')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
 
-      expect(mockPrismaURL.findMany).toHaveBeenCalledWith({ where: { userId: regularUser.id } });
+        expect(response.body.data).toHaveLength(2);
+        expect(response.body.pagination).toMatchObject({ page: 1, limit: 20, total: 2, pages: 1 });
+      });
+
+      it('should default to page 1, limit 20', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.findMany.mockResolvedValue([]);
+
+        await request(app).get('/urls').set('Authorization', `Bearer ${token}`).expect(200);
+
+        expect(mockPrismaURL.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ skip: 0, take: 20, orderBy: { createdAt: 'desc' } })
+        );
+      });
+
+      it('should apply page and limit from query params', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.findMany.mockResolvedValue([]);
+        mockPrismaURL.count.mockResolvedValue(50);
+
+        const response = await request(app)
+          .get('/urls?page=3&limit=10')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        expect(response.body.pagination).toMatchObject({ page: 3, limit: 10, total: 50, pages: 5 });
+        expect(mockPrismaURL.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ skip: 20, take: 10 })
+        );
+      });
+
+      it('should cap limit at 100', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.findMany.mockResolvedValue([]);
+
+        await request(app)
+          .get('/urls?limit=999')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        expect(mockPrismaURL.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ take: 100 })
+        );
+      });
     });
 
-    it('should return 401 without authorization header', async () => {
-      const response = await request(app).get('/urls').expect(401);
-      expect(response.body.error).toContain('Missing authorization token');
+    describe('filtering', () => {
+      it('should filter by tag', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.findMany.mockResolvedValue([]);
+
+        await request(app)
+          .get('/urls?tag=promo')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        const whereArg = mockPrismaURL.findMany.mock.calls[0][0].where;
+        expect(whereArg.AND).toContainEqual({ tags: { has: 'promo' } });
+      });
+
+      it('should filter by search term (originalUrl + customAlias)', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.findMany.mockResolvedValue([]);
+
+        await request(app)
+          .get('/urls?search=example')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        const whereArg = mockPrismaURL.findMany.mock.calls[0][0].where;
+        expect(whereArg.AND).toContainEqual({
+          OR: [
+            { originalUrl: { contains: 'example', mode: 'insensitive' } },
+            { customAlias: { contains: 'example', mode: 'insensitive' } },
+          ],
+        });
+      });
+
+      it('should filter expired=true to only expired links', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.findMany.mockResolvedValue([]);
+
+        await request(app)
+          .get('/urls?expired=true')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        const whereArg = mockPrismaURL.findMany.mock.calls[0][0].where;
+        expect(whereArg.AND[0].expiresAt).toHaveProperty('lt');
+      });
+
+      it('should filter expired=false to only active/non-expiring links', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.findMany.mockResolvedValue([]);
+
+        await request(app)
+          .get('/urls?expired=false')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        const whereArg = mockPrismaURL.findMany.mock.calls[0][0].where;
+        expect(whereArg.AND[0].OR).toContainEqual({ expiresAt: null });
+      });
+
+      it('should combine multiple filters with AND', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.findMany.mockResolvedValue([]);
+
+        await request(app)
+          .get('/urls?tag=promo&search=shop&expired=false')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        const whereArg = mockPrismaURL.findMany.mock.calls[0][0].where;
+        expect(whereArg.AND).toHaveLength(3);
+      });
     });
 
-    it('should return 403 with invalid token', async () => {
-      await request(app).get('/urls').set('Authorization', 'Bearer invalid-token').expect(403);
+    describe('auth', () => {
+      it('should return 401 without authorization header', async () => {
+        const response = await request(app).get('/urls').expect(401);
+        expect(response.body.error).toContain('Missing authorization token');
+      });
+
+      it('should return 403 with invalid token', async () => {
+        await request(app).get('/urls').set('Authorization', 'Bearer invalid-token').expect(403);
+      });
     });
   });
 

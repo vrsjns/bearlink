@@ -51,11 +51,52 @@ const parseExpiresAt = (expiresAt) => {
  * @param {string} deps.baseUrl - Base URL for short links
  * @returns {Object} Controller methods
  */
+const DEFAULT_PAGE_LIMIT = 20;
+const MAX_PAGE_LIMIT = 100;
+
 const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }) => {
   const listUrls = async (req, res) => {
     const { user: { id: userId } } = req;
-    const urls = await prisma.uRL.findMany({ where: { userId } });
-    res.json(urls);
+
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(MAX_PAGE_LIMIT, Math.max(1, parseInt(req.query.limit) || DEFAULT_PAGE_LIMIT));
+    const skip = (page - 1) * limit;
+
+    const where = { userId };
+    const conditions = [];
+
+    if (req.query.tag) {
+      conditions.push({ tags: { has: req.query.tag } });
+    }
+
+    if (req.query.search) {
+      conditions.push({
+        OR: [
+          { originalUrl: { contains: req.query.search, mode: 'insensitive' } },
+          { customAlias: { contains: req.query.search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (req.query.expired === 'true') {
+      conditions.push({ expiresAt: { lt: new Date() } });
+    } else if (req.query.expired === 'false') {
+      conditions.push({ OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }] });
+    }
+
+    if (conditions.length > 0) {
+      where.AND = conditions;
+    }
+
+    const [urls, total] = await Promise.all([
+      prisma.uRL.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      prisma.uRL.count({ where }),
+    ]);
+
+    res.json({
+      data: urls,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    });
   };
 
   const createUrl = async (req, res) => {
