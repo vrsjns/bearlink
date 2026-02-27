@@ -29,12 +29,13 @@ describe('Redirect Routes', () => {
 
   describe('GET /:shortId', () => {
     describe('successful redirects', () => {
-      it('should redirect to original URL', async () => {
+      it('should redirect to original URL with 302 by default', async () => {
         const url = {
           id: 1,
           shortId: 'abc1234567',
           originalUrl: 'https://example.com',
           userId: 1,
+          redirectType: 302,
           clicks: 5,
         };
 
@@ -48,12 +49,33 @@ describe('Redirect Routes', () => {
         expect(response.headers.location).toBe('https://example.com');
       });
 
+      it('should redirect with 301 when redirectType is 301', async () => {
+        const url = {
+          id: 1,
+          shortId: 'abc1234567',
+          originalUrl: 'https://example.com',
+          userId: 1,
+          redirectType: 301,
+          clicks: 5,
+        };
+
+        mockPrismaURL.findUnique.mockResolvedValue(url);
+        mockPrismaURL.update.mockResolvedValue({ ...url, clicks: 6 });
+
+        const response = await request(app)
+          .get('/abc1234567')
+          .expect(301);
+
+        expect(response.headers.location).toBe('https://example.com');
+      });
+
       it('should increment click counter', async () => {
         const url = {
           id: 1,
           shortId: 'abc1234567',
           originalUrl: 'https://example.com',
           userId: 1,
+          redirectType: 302,
           clicks: 5,
         };
 
@@ -76,6 +98,7 @@ describe('Redirect Routes', () => {
           shortId: 'abc1234567',
           originalUrl: 'https://example.com',
           userId: 1,
+          redirectType: 302,
           clicks: 5,
         };
 
@@ -99,6 +122,7 @@ describe('Redirect Routes', () => {
           shortId: 'abc1234567',
           originalUrl: 'https://example.com/path?query=value&foo=bar',
           userId: 1,
+          redirectType: 302,
           clicks: 0,
         };
 
@@ -118,6 +142,7 @@ describe('Redirect Routes', () => {
           shortId: 'abc1234567',
           originalUrl: 'http://example.com',
           userId: 1,
+          redirectType: 302,
           clicks: 0,
         };
 
@@ -171,6 +196,7 @@ describe('Redirect Routes', () => {
           shortId: 'malicious1',
           originalUrl: 'javascript:alert(1)',
           userId: 1,
+          redirectType: 302,
           clicks: 0,
         };
 
@@ -189,6 +215,7 @@ describe('Redirect Routes', () => {
           shortId: 'malicious2',
           originalUrl: 'data:text/html,<script>alert(1)</script>',
           userId: 1,
+          redirectType: 302,
           clicks: 0,
         };
 
@@ -207,6 +234,7 @@ describe('Redirect Routes', () => {
           shortId: 'malicious1',
           originalUrl: 'javascript:alert(1)',
           userId: 1,
+          redirectType: 302,
           clicks: 0,
         };
 
@@ -225,6 +253,7 @@ describe('Redirect Routes', () => {
           shortId: 'malicious1',
           originalUrl: 'javascript:alert(1)',
           userId: 1,
+          redirectType: 302,
           clicks: 0,
         };
 
@@ -255,6 +284,7 @@ describe('Redirect Routes', () => {
           shortId: 'abc1234567',
           originalUrl: 'https://example.com',
           userId: 1,
+          redirectType: 302,
           clicks: 5,
         };
 
@@ -276,6 +306,7 @@ describe('Redirect Routes', () => {
           shortId: 'abc1234567',
           originalUrl: 'https://example.com',
           userId: 1,
+          redirectType: 302,
           clicks: 0,
         };
 

@@ -57,6 +57,22 @@ const createEventPublisher = (channel) => {
   };
 
   /**
+   * Publishes a url_updated event
+   * @param {import('./types').UrlUpdatedPayload} payload
+   */
+  const publishUrlUpdated = (payload) => {
+    publishEvent(EVENT_TYPES.URL_UPDATED, payload);
+  };
+
+  /**
+   * Publishes a url_deleted event
+   * @param {import('./types').UrlDeletedPayload} payload
+   */
+  const publishUrlDeleted = (payload) => {
+    publishEvent(EVENT_TYPES.URL_DELETED, payload);
+  };
+
+  /**
    * Publishes a url_clicked event
    * @param {import('./types').UrlClickedPayload} payload
    */
@@ -80,6 +96,8 @@ const createEventPublisher = (channel) => {
     publishEvent,
     publishUserRegistered,
     publishUrlCreated,
+    publishUrlUpdated,
+    publishUrlDeleted,
     publishUrlClicked,
     publishEmailNotification,
   };

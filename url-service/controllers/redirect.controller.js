@@ -30,7 +30,7 @@ const createRedirectController = ({ prisma, eventPublisher }) => {
 
         eventPublisher.publishUrlClicked({ shortId, originalUrl: url.originalUrl });
 
-        res.redirect(url.originalUrl);
+        res.redirect(url.redirectType, url.originalUrl);
       } else {
         res.status(404).json({ error: 'URL not found' });
       }

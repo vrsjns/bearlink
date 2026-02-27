@@ -4,6 +4,9 @@ const { generateShortId } = require('../services/url.service');
 
 const logger = createLogger('url-service');
 
+const VALID_REDIRECT_TYPES = [301, 302];
+const MAX_SHORTID_RETRIES = 3;
+
 /**
  * Create URLs controller with dependencies
  * @param {Object} deps - Dependencies
@@ -20,26 +23,38 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
   };
 
   const createUrl = async (req, res) => {
-    const { originalUrl } = req.body;
+    const { originalUrl, redirectType = 302 } = req.body;
     const { id: userId } = req.user;
 
-    // Validate required fields
     const { isValid, missing } = validateRequiredFields(req.body, ['originalUrl']);
     if (!isValid) {
       return validationError(res, 'Missing required fields', { missing });
     }
 
-    // Validate URL format and protocol
     if (!isValidUrl(originalUrl)) {
       return validationError(res, 'Invalid URL. Must be a valid HTTP or HTTPS URL.');
     }
 
-    const shortId = generateShortId();
+    if (!VALID_REDIRECT_TYPES.includes(redirectType)) {
+      return validationError(res, 'redirectType must be 301 or 302.');
+    }
 
     try {
-      const newUrl = await prisma.uRL.create({
-        data: { originalUrl, shortId, userId },
-      });
+      let newUrl;
+      for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
+        try {
+          newUrl = await prisma.uRL.create({
+            data: { originalUrl, shortId: generateShortId(), userId, redirectType },
+          });
+          break;
+        } catch (error) {
+          if (error.code === 'P2002' && attempt < MAX_SHORTID_RETRIES - 1) {
+            logger.warn('shortId collision, retrying', { attempt: attempt + 1 });
+            continue;
+          }
+          throw error;
+        }
+      }
 
       eventPublisher.publishUrlCreated(newUrl);
 
@@ -47,7 +62,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
         publishPreviewJob({ urlId: newUrl.id, originalUrl });
       }
 
-      res.json({ shortUrl: `${baseUrl}/${shortId}` });
+      res.json({ shortUrl: `${baseUrl}/${newUrl.shortId}` });
     } catch (error) {
       logger.error('Error shortening URL', { error: error.message });
       res.status(500).json({ error: 'Failed to shorten URL' });
@@ -58,7 +73,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     const {
       user: { id: userId },
       params: { id },
-      body: { originalURL }
+      body: { originalUrl, redirectType }
     } = req;
 
     const urlId = Number.parseInt(id, 10);
@@ -68,18 +83,35 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       return res.status(400).json({ error: 'Invalid URL ID.' });
     }
 
-    if (!originalURL) {
+    if (!originalUrl) {
       logger.error('Error updating URL: missing original URL');
       return res.status(400).json({ error: 'Missing original URL.' });
     }
 
-    // Validate URL format and protocol
-    if (!isValidUrl(originalURL)) {
+    if (!isValidUrl(originalUrl)) {
       return validationError(res, 'Invalid URL. Must be a valid HTTP or HTTPS URL.');
     }
 
-    const urls = await prisma.uRL.update({ where: { userId, id: urlId }, data: { originalUrl: originalURL } });
-    res.json(urls);
+    if (redirectType !== undefined && !VALID_REDIRECT_TYPES.includes(redirectType)) {
+      return validationError(res, 'redirectType must be 301 or 302.');
+    }
+
+    const data = { originalUrl };
+    if (redirectType !== undefined) {
+      data.redirectType = redirectType;
+    }
+
+    try {
+      const updatedUrl = await prisma.uRL.update({ where: { userId, id: urlId }, data });
+      eventPublisher.publishUrlUpdated(updatedUrl);
+      res.json(updatedUrl);
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ error: 'URL not found.' });
+      }
+      logger.error('Error updating URL', { error: error.message });
+      res.status(500).json({ error: 'Failed to update URL' });
+    }
   };
 
   const deleteUrl = async (req, res) => {
@@ -91,14 +123,18 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     const urlId = Number.parseInt(id, 10);
 
     if (!Number.isInteger(urlId)) {
-      logger.error('Error updating URL: invalid URL ID', { urlId });
+      logger.error('Error deleting URL: invalid URL ID', { urlId });
       return res.status(400).json({ error: 'Invalid URL ID.' });
     }
 
     try {
-      await prisma.uRL.delete({ where: { id: urlId, userId } });
+      const deletedUrl = await prisma.uRL.delete({ where: { id: urlId, userId } });
+      eventPublisher.publishUrlDeleted(deletedUrl);
       res.sendStatus(204);
     } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ error: 'URL not found.' });
+      }
       logger.error('Error deleting URL', { error: error.message });
       res.status(500).json({ error: 'Failed to delete URL' });
     }

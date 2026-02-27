@@ -42,8 +42,8 @@ describe('URLs Routes', () => {
       it('should return list of URLs for authenticated user', async () => {
         const token = generateTestToken(regularUser);
         const urls = [
-          { id: 1, shortId: 'abc1234567', originalUrl: 'https://example.com', userId: 1, clicks: 5 },
-          { id: 2, shortId: 'xyz9876543', originalUrl: 'https://google.com', userId: 1, clicks: 10 },
+          { id: 1, shortId: 'abc1234567', originalUrl: 'https://example.com', userId: 1, clicks: 5, redirectType: 302 },
+          { id: 2, shortId: 'xyz9876543', originalUrl: 'https://google.com', userId: 1, clicks: 10, redirectType: 302 },
         ];
 
         mockPrismaURL.findMany.mockResolvedValue(urls);
@@ -115,6 +115,7 @@ describe('URLs Routes', () => {
           shortId: args.data.shortId,
           originalUrl: args.data.originalUrl,
           userId: args.data.userId,
+          redirectType: args.data.redirectType,
           clicks: 0,
         }));
 
@@ -136,6 +137,7 @@ describe('URLs Routes', () => {
           shortId: args.data.shortId,
           originalUrl: args.data.originalUrl,
           userId: args.data.userId,
+          redirectType: args.data.redirectType,
           clicks: 0,
         }));
 
@@ -152,6 +154,50 @@ describe('URLs Routes', () => {
         expect(createCall.data.shortId).toMatch(/^[A-Za-z0-9_-]{10}$/);
       });
 
+      it('should default redirectType to 302', async () => {
+        const token = generateTestToken(regularUser);
+
+        mockPrismaURL.create.mockImplementation((args: any) => Promise.resolve({
+          id: 1,
+          shortId: args.data.shortId,
+          originalUrl: args.data.originalUrl,
+          userId: args.data.userId,
+          redirectType: args.data.redirectType,
+          clicks: 0,
+        }));
+
+        await request(app)
+          .post('/urls')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com' })
+          .expect(200);
+
+        const createCall = mockPrismaURL.create.mock.calls[0][0];
+        expect(createCall.data.redirectType).toBe(302);
+      });
+
+      it('should accept redirectType 301', async () => {
+        const token = generateTestToken(regularUser);
+
+        mockPrismaURL.create.mockImplementation((args: any) => Promise.resolve({
+          id: 1,
+          shortId: args.data.shortId,
+          originalUrl: args.data.originalUrl,
+          userId: args.data.userId,
+          redirectType: args.data.redirectType,
+          clicks: 0,
+        }));
+
+        await request(app)
+          .post('/urls')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com', redirectType: 301 })
+          .expect(200);
+
+        const createCall = mockPrismaURL.create.mock.calls[0][0];
+        expect(createCall.data.redirectType).toBe(301);
+      });
+
       it('should publish url_created event', async () => {
         const token = generateTestToken(regularUser);
 
@@ -160,6 +206,7 @@ describe('URLs Routes', () => {
           shortId: args.data.shortId,
           originalUrl: args.data.originalUrl,
           userId: args.data.userId,
+          redirectType: args.data.redirectType,
           clicks: 0,
         }));
 
@@ -185,6 +232,7 @@ describe('URLs Routes', () => {
           shortId: args.data.shortId,
           originalUrl: args.data.originalUrl,
           userId: args.data.userId,
+          redirectType: args.data.redirectType,
           clicks: 0,
         }));
 
@@ -205,6 +253,7 @@ describe('URLs Routes', () => {
           shortId: args.data.shortId,
           originalUrl: args.data.originalUrl,
           userId: args.data.userId,
+          redirectType: args.data.redirectType,
           clicks: 0,
         }));
 
@@ -215,6 +264,49 @@ describe('URLs Routes', () => {
           .expect(200);
 
         expect(response.body.shortUrl).toBeDefined();
+      });
+    });
+
+    describe('shortId collision retry', () => {
+      it('should retry on shortId collision and succeed on second attempt', async () => {
+        const token = generateTestToken(regularUser);
+        const collisionError = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+
+        mockPrismaURL.create
+          .mockRejectedValueOnce(collisionError)
+          .mockImplementation((args: any) => Promise.resolve({
+            id: 1,
+            shortId: args.data.shortId,
+            originalUrl: args.data.originalUrl,
+            userId: args.data.userId,
+            redirectType: args.data.redirectType,
+            clicks: 0,
+          }));
+
+        const response = await request(app)
+          .post('/urls')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com' })
+          .expect(200);
+
+        expect(mockPrismaURL.create).toHaveBeenCalledTimes(2);
+        expect(response.body).toHaveProperty('shortUrl');
+      });
+
+      it('should return 500 after exhausting all retries', async () => {
+        const token = generateTestToken(regularUser);
+        const collisionError = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+
+        mockPrismaURL.create.mockRejectedValue(collisionError);
+
+        const response = await request(app)
+          .post('/urls')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com' })
+          .expect(500);
+
+        expect(mockPrismaURL.create).toHaveBeenCalledTimes(3);
+        expect(response.body.error).toBe('Failed to shorten URL');
       });
     });
 
@@ -280,6 +372,18 @@ describe('URLs Routes', () => {
 
         expect(response.body).toHaveProperty('error');
       });
+
+      it('should return 400 for invalid redirectType', async () => {
+        const token = generateTestToken(regularUser);
+
+        const response = await request(app)
+          .post('/urls')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com', redirectType: 303 })
+          .expect(400);
+
+        expect(response.body.error).toContain('redirectType must be 301 or 302');
+      });
     });
 
     describe('database errors', () => {
@@ -320,6 +424,7 @@ describe('URLs Routes', () => {
           shortId: 'abc1234567',
           originalUrl: 'https://newsite.com',
           userId: regularUser.id,
+          redirectType: 302,
           clicks: 5,
         };
 
@@ -328,7 +433,7 @@ describe('URLs Routes', () => {
         const response = await request(app)
           .put('/urls/1')
           .set('Authorization', `Bearer ${token}`)
-          .send({ originalURL: 'https://newsite.com' })
+          .send({ originalUrl: 'https://newsite.com' })
           .expect(200);
 
         expect(response.body.originalUrl).toBe('https://newsite.com');
@@ -341,19 +446,80 @@ describe('URLs Routes', () => {
           shortId: 'abc1234567',
           originalUrl: 'https://newsite.com',
           userId: regularUser.id,
+          redirectType: 302,
           clicks: 0,
         });
 
         await request(app)
           .put('/urls/1')
           .set('Authorization', `Bearer ${token}`)
-          .send({ originalURL: 'https://newsite.com' })
+          .send({ originalUrl: 'https://newsite.com' })
           .expect(200);
 
         expect(mockPrismaURL.update).toHaveBeenCalledWith({
           where: { userId: regularUser.id, id: 1 },
           data: { originalUrl: 'https://newsite.com' },
         });
+      });
+
+      it('should update redirectType when provided', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.update.mockResolvedValue({
+          id: 1,
+          shortId: 'abc1234567',
+          originalUrl: 'https://newsite.com',
+          userId: regularUser.id,
+          redirectType: 301,
+          clicks: 0,
+        });
+
+        await request(app)
+          .put('/urls/1')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://newsite.com', redirectType: 301 })
+          .expect(200);
+
+        expect(mockPrismaURL.update).toHaveBeenCalledWith({
+          where: { userId: regularUser.id, id: 1 },
+          data: { originalUrl: 'https://newsite.com', redirectType: 301 },
+        });
+      });
+
+      it('should publish url_updated event', async () => {
+        const token = generateTestToken(regularUser);
+        const updatedUrl = {
+          id: 1,
+          shortId: 'abc1234567',
+          originalUrl: 'https://newsite.com',
+          userId: regularUser.id,
+          redirectType: 302,
+          clicks: 5,
+        };
+
+        mockPrismaURL.update.mockResolvedValue(updatedUrl);
+
+        await request(app)
+          .put('/urls/1')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://newsite.com' })
+          .expect(200);
+
+        expect(mockEventPublisher.publishUrlUpdated).toHaveBeenCalledTimes(1);
+        expect(mockEventPublisher.publishUrlUpdated).toHaveBeenCalledWith(updatedUrl);
+      });
+
+      it('should return 404 when URL not found', async () => {
+        const token = generateTestToken(regularUser);
+        const notFoundError = Object.assign(new Error('Record not found'), { code: 'P2025' });
+        mockPrismaURL.update.mockRejectedValue(notFoundError);
+
+        const response = await request(app)
+          .put('/urls/999')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://newsite.com' })
+          .expect(404);
+
+        expect(response.body.error).toBe('URL not found.');
       });
     });
 
@@ -364,13 +530,13 @@ describe('URLs Routes', () => {
         const response = await request(app)
           .put('/urls/invalid')
           .set('Authorization', `Bearer ${token}`)
-          .send({ originalURL: 'https://newsite.com' })
+          .send({ originalUrl: 'https://newsite.com' })
           .expect(400);
 
         expect(response.body.error).toBe('Invalid URL ID.');
       });
 
-      it('should return 400 when originalURL is missing', async () => {
+      it('should return 400 when originalUrl is missing', async () => {
         const token = generateTestToken(regularUser);
 
         const response = await request(app)
@@ -388,10 +554,22 @@ describe('URLs Routes', () => {
         const response = await request(app)
           .put('/urls/1')
           .set('Authorization', `Bearer ${token}`)
-          .send({ originalURL: 'not-a-url' })
+          .send({ originalUrl: 'not-a-url' })
           .expect(400);
 
         expect(response.body.error).toContain('Invalid URL');
+      });
+
+      it('should return 400 for invalid redirectType', async () => {
+        const token = generateTestToken(regularUser);
+
+        const response = await request(app)
+          .put('/urls/1')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://newsite.com', redirectType: 200 })
+          .expect(400);
+
+        expect(response.body.error).toContain('redirectType must be 301 or 302');
       });
     });
   });
@@ -400,7 +578,8 @@ describe('URLs Routes', () => {
     describe('successful deletion', () => {
       it('should delete URL and return 204', async () => {
         const token = generateTestToken(regularUser);
-        mockPrismaURL.delete.mockResolvedValue({});
+        const deletedUrl = { id: 1, shortId: 'abc1234567', originalUrl: 'https://example.com', userId: regularUser.id, redirectType: 302, clicks: 0 };
+        mockPrismaURL.delete.mockResolvedValue(deletedUrl);
 
         await request(app)
           .delete('/urls/1')
@@ -410,6 +589,33 @@ describe('URLs Routes', () => {
         expect(mockPrismaURL.delete).toHaveBeenCalledWith({
           where: { id: 1, userId: regularUser.id },
         });
+      });
+
+      it('should publish url_deleted event', async () => {
+        const token = generateTestToken(regularUser);
+        const deletedUrl = { id: 1, shortId: 'abc1234567', originalUrl: 'https://example.com', userId: regularUser.id, redirectType: 302, clicks: 3 };
+        mockPrismaURL.delete.mockResolvedValue(deletedUrl);
+
+        await request(app)
+          .delete('/urls/1')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(204);
+
+        expect(mockEventPublisher.publishUrlDeleted).toHaveBeenCalledTimes(1);
+        expect(mockEventPublisher.publishUrlDeleted).toHaveBeenCalledWith(deletedUrl);
+      });
+
+      it('should return 404 when URL not found', async () => {
+        const token = generateTestToken(regularUser);
+        const notFoundError = Object.assign(new Error('Record not found'), { code: 'P2025' });
+        mockPrismaURL.delete.mockRejectedValue(notFoundError);
+
+        const response = await request(app)
+          .delete('/urls/999')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(404);
+
+        expect(response.body.error).toBe('URL not found.');
       });
     });
 
@@ -445,7 +651,7 @@ describe('URLs Routes', () => {
     it('should require authentication for all endpoints', async () => {
       await request(app).get('/urls').expect(401);
       await request(app).post('/urls').send({ originalUrl: 'https://example.com' }).expect(401);
-      await request(app).put('/urls/1').send({ originalURL: 'https://example.com' }).expect(401);
+      await request(app).put('/urls/1').send({ originalUrl: 'https://example.com' }).expect(401);
       await request(app).delete('/urls/1').expect(401);
     });
 

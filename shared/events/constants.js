@@ -14,6 +14,8 @@ const QUEUES = Object.freeze({
 const EVENT_TYPES = Object.freeze({
   USER_REGISTERED: 'user_registered',
   URL_CREATED: 'url_created',
+  URL_UPDATED: 'url_updated',
+  URL_DELETED: 'url_deleted',
   URL_CLICKED: 'url_clicked',
 });
 

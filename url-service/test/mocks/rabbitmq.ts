@@ -11,6 +11,8 @@ export const mockChannel = {
 export const mockEventPublisher = {
   publishUserRegistered: vi.fn(),
   publishUrlCreated: vi.fn(),
+  publishUrlUpdated: vi.fn(),
+  publishUrlDeleted: vi.fn(),
   publishUrlClicked: vi.fn(),
   publishEmailNotification: vi.fn(),
   publishEvent: vi.fn(),

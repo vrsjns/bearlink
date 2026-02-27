@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "URL" ADD COLUMN "redirectType" INTEGER NOT NULL DEFAULT 302;
