@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const { createLogger } = require('shared/utils/logger');
 const { isValidUrl, validateRequiredFields, validationError } = require('shared/utils/validation');
 const { generateShortId } = require('../services/url.service');
@@ -6,6 +7,41 @@ const logger = createLogger('url-service');
 
 const VALID_REDIRECT_TYPES = [301, 302];
 const MAX_SHORTID_RETRIES = 3;
+const ALIAS_REGEX = /^[a-zA-Z0-9_-]{3,50}$/;
+const RESERVED_SLUGS = ['urls', 'health', 'ready'];
+
+/**
+ * Strip passwordHash before publishing to events
+ */
+const sanitizeForEvent = ({ passwordHash, ...url }) => url;
+
+/**
+ * Validate and parse a custom alias. Returns an error string or null.
+ */
+const validateAlias = (alias) => {
+  if (!ALIAS_REGEX.test(alias)) {
+    return 'Custom alias must be 3-50 characters and contain only letters, numbers, hyphens, and underscores.';
+  }
+  if (RESERVED_SLUGS.includes(alias.toLowerCase())) {
+    return 'This custom alias is reserved.';
+  }
+  return null;
+};
+
+/**
+ * Validate and parse an expiresAt value. Returns { date } or { error }.
+ */
+const parseExpiresAt = (expiresAt) => {
+  if (expiresAt === null) return { date: null };
+  const date = new Date(expiresAt);
+  if (isNaN(date.getTime())) {
+    return { error: 'expiresAt must be a valid ISO 8601 date.' };
+  }
+  if (date <= new Date()) {
+    return { error: 'expiresAt must be in the future.' };
+  }
+  return { date };
+};
 
 /**
  * Create URLs controller with dependencies
@@ -23,7 +59,14 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
   };
 
   const createUrl = async (req, res) => {
-    const { originalUrl, redirectType = 302 } = req.body;
+    const {
+      originalUrl,
+      redirectType = 302,
+      customAlias,
+      expiresAt,
+      password,
+      tags = [],
+    } = req.body;
     const { id: userId } = req.user;
 
     const { isValid, missing } = validateRequiredFields(req.body, ['originalUrl']);
@@ -39,30 +82,68 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       return validationError(res, 'redirectType must be 301 or 302.');
     }
 
+    if (customAlias !== undefined) {
+      const aliasError = validateAlias(customAlias);
+      if (aliasError) return validationError(res, aliasError);
+    }
+
+    let expiresAtDate;
+    if (expiresAt !== undefined) {
+      const result = parseExpiresAt(expiresAt);
+      if (result.error) return validationError(res, result.error);
+      expiresAtDate = result.date;
+    }
+
+    if (!Array.isArray(tags) || tags.some((t) => typeof t !== 'string')) {
+      return validationError(res, 'tags must be an array of strings.');
+    }
+
+    let passwordHash;
+    if (password !== undefined) {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
+
     try {
       let newUrl;
-      for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
+
+      if (customAlias) {
+        // Custom alias — single attempt; P2002 means the alias is taken
         try {
           newUrl = await prisma.uRL.create({
-            data: { originalUrl, shortId: generateShortId(), userId, redirectType },
+            data: { originalUrl, shortId: generateShortId(), customAlias, userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags },
           });
-          break;
         } catch (error) {
-          if (error.code === 'P2002' && attempt < MAX_SHORTID_RETRIES - 1) {
-            logger.warn('shortId collision, retrying', { attempt: attempt + 1 });
-            continue;
+          if (error.code === 'P2002') {
+            return res.status(409).json({ error: 'Custom alias is already taken.' });
           }
           throw error;
         }
+      } else {
+        // Auto-generated shortId — retry on collision
+        for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
+          try {
+            newUrl = await prisma.uRL.create({
+              data: { originalUrl, shortId: generateShortId(), userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags },
+            });
+            break;
+          } catch (error) {
+            if (error.code === 'P2002' && attempt < MAX_SHORTID_RETRIES - 1) {
+              logger.warn('shortId collision, retrying', { attempt: attempt + 1 });
+              continue;
+            }
+            throw error;
+          }
+        }
       }
 
-      eventPublisher.publishUrlCreated(newUrl);
+      eventPublisher.publishUrlCreated(sanitizeForEvent(newUrl));
 
       if (publishPreviewJob) {
         publishPreviewJob({ urlId: newUrl.id, originalUrl });
       }
 
-      res.json({ shortUrl: `${baseUrl}/${newUrl.shortId}` });
+      const slug = newUrl.customAlias || newUrl.shortId;
+      res.json({ shortUrl: `${baseUrl}/${slug}` });
     } catch (error) {
       logger.error('Error shortening URL', { error: error.message });
       res.status(500).json({ error: 'Failed to shorten URL' });
@@ -73,7 +154,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     const {
       user: { id: userId },
       params: { id },
-      body: { originalUrl, redirectType }
+      body: { originalUrl, redirectType, customAlias, expiresAt, password, tags },
     } = req;
 
     const urlId = Number.parseInt(id, 10);
@@ -96,16 +177,39 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       return validationError(res, 'redirectType must be 301 or 302.');
     }
 
+    if (customAlias !== undefined && customAlias !== null) {
+      const aliasError = validateAlias(customAlias);
+      if (aliasError) return validationError(res, aliasError);
+    }
+
+    let expiresAtDate;
+    if (expiresAt !== undefined) {
+      const result = parseExpiresAt(expiresAt);
+      if (result.error) return validationError(res, result.error);
+      expiresAtDate = result.date;
+    }
+
+    if (tags !== undefined && (!Array.isArray(tags) || tags.some((t) => typeof t !== 'string'))) {
+      return validationError(res, 'tags must be an array of strings.');
+    }
+
     const data = { originalUrl };
-    if (redirectType !== undefined) {
-      data.redirectType = redirectType;
+    if (redirectType !== undefined) data.redirectType = redirectType;
+    if (customAlias !== undefined) data.customAlias = customAlias;
+    if (expiresAt !== undefined) data.expiresAt = expiresAtDate;
+    if (tags !== undefined) data.tags = tags;
+    if (password !== undefined) {
+      data.passwordHash = password === null ? null : await bcrypt.hash(password, 10);
     }
 
     try {
       const updatedUrl = await prisma.uRL.update({ where: { userId, id: urlId }, data });
-      eventPublisher.publishUrlUpdated(updatedUrl);
+      eventPublisher.publishUrlUpdated(sanitizeForEvent(updatedUrl));
       res.json(updatedUrl);
     } catch (error) {
+      if (error.code === 'P2002') {
+        return res.status(409).json({ error: 'Custom alias is already taken.' });
+      }
       if (error.code === 'P2025') {
         return res.status(404).json({ error: 'URL not found.' });
       }
@@ -129,7 +233,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
 
     try {
       const deletedUrl = await prisma.uRL.delete({ where: { id: urlId, userId } });
-      eventPublisher.publishUrlDeleted(deletedUrl);
+      eventPublisher.publishUrlDeleted(sanitizeForEvent(deletedUrl));
       res.sendStatus(204);
     } catch (error) {
       if (error.code === 'P2025') {

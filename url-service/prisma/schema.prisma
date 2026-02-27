@@ -11,7 +11,11 @@ model URL {
   id                 Int       @id @default(autoincrement())
   originalUrl        String
   shortId            String    @unique
+  customAlias        String?   @unique
   redirectType       Int       @default(302)
+  expiresAt          DateTime?
+  passwordHash       String?
+  tags               String[]
   clicks             Int       @default(0)
   createdAt          DateTime  @default(now())
   userId             Int
