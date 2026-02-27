@@ -87,17 +87,17 @@ const ManageURLs = () => {
                     <table className="w-full table-fixed">
                         <thead>
                             <tr>
-                                <th className="px-4 py-2 w-16"></th>
-                                <th className="px-4 py-2 w-28">Short URL</th>
+                                <th className="px-2 py-2 w-20"></th>
+                                <th className="px-4 py-2 w-36">Short URL</th>
                                 <th className="px-4 py-2">Original URL</th>
-                                <th className="px-4 py-2 w-16">Clicks</th>
-                                <th className="px-4 py-2 w-36">Actions</th>
+                                <th className="px-4 py-2 w-16 text-center">Clicks</th>
+                                <th className="px-4 py-2 w-48">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {urls.map(url => (
                                 <tr key={url.id}>
-                                    <td className="border px-4 py-2 w-16 text-center">
+                                    <td className="border px-2 py-2 w-20 text-center">
                                         {url.previewImageUrl ? (
                                             // eslint-disable-next-line @next/next/no-img-element
                                             <img
@@ -135,7 +135,7 @@ const ManageURLs = () => {
                                             </div>
                                         )}
                                     </td>
-                                    <td className="border px-4 py-2">{url.clicks}</td>
+                                    <td className="border px-4 py-2 text-center">{url.clicks}</td>
                                     <td className="border px-4 py-2">
                                         <div className="flex space-x-2 justify-center">
                                             {editingUrl === url.id ? (
