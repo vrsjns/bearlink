@@ -9,6 +9,7 @@ const VALID_REDIRECT_TYPES = [301, 302];
 const MAX_SHORTID_RETRIES = 3;
 const ALIAS_REGEX = /^[a-zA-Z0-9_-]{3,50}$/;
 const RESERVED_SLUGS = ['urls', 'health', 'ready'];
+const BULK_MAX_ITEMS = 50;
 
 /**
  * Strip passwordHash before publishing to events
@@ -41,6 +42,23 @@ const parseExpiresAt = (expiresAt) => {
     return { error: 'expiresAt must be in the future.' };
   }
   return { date };
+};
+
+/**
+ * Validate utmParams: must be null/undefined or a plain object with string/number values.
+ * Returns an error string or null.
+ */
+const validateUtmParams = (utmParams) => {
+  if (utmParams === null || utmParams === undefined) return null;
+  if (typeof utmParams !== 'object' || Array.isArray(utmParams)) {
+    return 'utmParams must be a plain object.';
+  }
+  for (const [key, value] of Object.entries(utmParams)) {
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      return `utmParams.${key} must be a string or number.`;
+    }
+  }
+  return null;
 };
 
 /**
@@ -107,6 +125,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       expiresAt,
       password,
       tags = [],
+      utmParams,
     } = req.body;
     const { id: userId } = req.user;
 
@@ -139,6 +158,11 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       return validationError(res, 'tags must be an array of strings.');
     }
 
+    if (utmParams !== undefined) {
+      const utmError = validateUtmParams(utmParams);
+      if (utmError) return validationError(res, utmError);
+    }
+
     let passwordHash;
     if (password !== undefined) {
       passwordHash = await bcrypt.hash(password, 10);
@@ -151,7 +175,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
         // Custom alias — single attempt; P2002 means the alias is taken
         try {
           newUrl = await prisma.uRL.create({
-            data: { originalUrl, shortId: generateShortId(), customAlias, userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags },
+            data: { originalUrl, shortId: generateShortId(), customAlias, userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams },
           });
         } catch (error) {
           if (error.code === 'P2002') {
@@ -164,7 +188,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
         for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
           try {
             newUrl = await prisma.uRL.create({
-              data: { originalUrl, shortId: generateShortId(), userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags },
+              data: { originalUrl, shortId: generateShortId(), userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams },
             });
             break;
           } catch (error) {
@@ -191,11 +215,111 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     }
   };
 
+  const createUrlsBulk = async (req, res) => {
+    const { id: userId } = req.user;
+    const { urls } = req.body;
+
+    if (!Array.isArray(urls)) {
+      return res.status(400).json({ error: 'urls must be an array.' });
+    }
+
+    if (urls.length === 0) {
+      return res.status(400).json({ error: 'urls array must not be empty.' });
+    }
+
+    if (urls.length > BULK_MAX_ITEMS) {
+      return res.status(400).json({ error: `Bulk create is limited to ${BULK_MAX_ITEMS} URLs per request.` });
+    }
+
+    const results = await Promise.all(
+      urls.map(async (item) => {
+        const {
+          originalUrl,
+          redirectType = 302,
+          customAlias,
+          expiresAt,
+          password,
+          tags = [],
+          utmParams,
+        } = item || {};
+
+        // Per-item validation
+        if (!originalUrl) return { error: 'originalUrl is required.' };
+        if (!isValidUrl(originalUrl)) return { error: 'Invalid URL. Must be a valid HTTP or HTTPS URL.' };
+        if (!VALID_REDIRECT_TYPES.includes(redirectType)) return { error: 'redirectType must be 301 or 302.' };
+
+        if (customAlias !== undefined) {
+          const aliasError = validateAlias(customAlias);
+          if (aliasError) return { error: aliasError };
+        }
+
+        let expiresAtDate;
+        if (expiresAt !== undefined) {
+          const result = parseExpiresAt(expiresAt);
+          if (result.error) return { error: result.error };
+          expiresAtDate = result.date;
+        }
+
+        if (!Array.isArray(tags) || tags.some((t) => typeof t !== 'string')) {
+          return { error: 'tags must be an array of strings.' };
+        }
+
+        if (utmParams !== undefined) {
+          const utmError = validateUtmParams(utmParams);
+          if (utmError) return { error: utmError };
+        }
+
+        let passwordHash;
+        if (password !== undefined) {
+          passwordHash = await bcrypt.hash(password, 10);
+        }
+
+        try {
+          let newUrl;
+
+          if (customAlias) {
+            try {
+              newUrl = await prisma.uRL.create({
+                data: { originalUrl, shortId: generateShortId(), customAlias, userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams },
+              });
+            } catch (err) {
+              if (err.code === 'P2002') return { error: 'Custom alias is already taken.' };
+              throw err;
+            }
+          } else {
+            for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
+              try {
+                newUrl = await prisma.uRL.create({
+                  data: { originalUrl, shortId: generateShortId(), userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams },
+                });
+                break;
+              } catch (err) {
+                if (err.code === 'P2002' && attempt < MAX_SHORTID_RETRIES - 1) continue;
+                throw err;
+              }
+            }
+          }
+
+          eventPublisher.publishUrlCreated(sanitizeForEvent(newUrl));
+          if (publishPreviewJob) publishPreviewJob({ urlId: newUrl.id, originalUrl });
+
+          const slug = newUrl.customAlias || newUrl.shortId;
+          return { shortUrl: `${baseUrl}/${slug}` };
+        } catch (err) {
+          logger.error('Bulk create item error', { error: err.message, originalUrl });
+          return { error: 'Failed to shorten URL' };
+        }
+      })
+    );
+
+    res.json({ results });
+  };
+
   const updateUrl = async (req, res) => {
     const {
       user: { id: userId },
       params: { id },
-      body: { originalUrl, redirectType, customAlias, expiresAt, password, tags },
+      body: { originalUrl, redirectType, customAlias, expiresAt, password, tags, utmParams },
     } = req;
 
     const urlId = Number.parseInt(id, 10);
@@ -234,6 +358,11 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       return validationError(res, 'tags must be an array of strings.');
     }
 
+    if (utmParams !== undefined) {
+      const utmError = validateUtmParams(utmParams);
+      if (utmError) return validationError(res, utmError);
+    }
+
     const data = { originalUrl };
     if (redirectType !== undefined) data.redirectType = redirectType;
     if (customAlias !== undefined) data.customAlias = customAlias;
@@ -242,6 +371,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     if (password !== undefined) {
       data.passwordHash = password === null ? null : await bcrypt.hash(password, 10);
     }
+    if (utmParams !== undefined) data.utmParams = utmParams;
 
     try {
       const updatedUrl = await prisma.uRL.update({ where: { userId, id: urlId }, data });
@@ -288,6 +418,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
   return {
     listUrls,
     createUrl,
+    createUrlsBulk,
     updateUrl,
     deleteUrl,
   };

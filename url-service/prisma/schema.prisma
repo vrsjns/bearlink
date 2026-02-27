@@ -16,6 +16,7 @@ model URL {
   expiresAt          DateTime?
   passwordHash       String?
   tags               String[]
+  utmParams          Json?
   clicks             Int       @default(0)
   createdAt          DateTime  @default(now())
   userId             Int

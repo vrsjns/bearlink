@@ -1,0 +1,1 @@
+ALTER TABLE "URL" ADD COLUMN "utmParams" JSONB;

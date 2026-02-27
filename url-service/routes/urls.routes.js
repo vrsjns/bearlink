@@ -16,6 +16,7 @@ const createUrlsRoutes = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }
   const controller = createUrlsController({ prisma, eventPublisher, baseUrl, publishPreviewJob });
 
   router.get('/urls', authenticateJWT, apiLimiter, controller.listUrls);
+  router.post('/urls/bulk', authenticateJWT, apiLimiter, controller.createUrlsBulk);
   router.post('/urls', authenticateJWT, apiLimiter, controller.createUrl);
   router.put('/urls/:id', authenticateJWT, apiLimiter, controller.updateUrl);
   router.delete('/urls/:id', authenticateJWT, apiLimiter, controller.deleteUrl);

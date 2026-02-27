@@ -17,7 +17,7 @@ const createRoutes = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }) =>
   router.use(createUrlsRoutes({ prisma, eventPublisher, baseUrl, publishPreviewJob }));
 
   // Mount redirect routes (must be last due to /:shortId pattern)
-  router.use(createRedirectRoutes({ prisma, eventPublisher }));
+  router.use(createRedirectRoutes({ prisma, eventPublisher, baseUrl }));
 
   return router;
 };

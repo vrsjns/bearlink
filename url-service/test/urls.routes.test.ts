@@ -19,6 +19,7 @@ const makeUrl = (overrides = {}) => ({
   expiresAt: null,
   passwordHash: null,
   tags: [],
+  utmParams: null,
   clicks: 0,
   ...overrides,
 });
@@ -824,6 +825,216 @@ describe('URLs Routes', () => {
         .expect(500);
 
       expect(response.body.error).toBe('Failed to delete URL');
+    });
+  });
+
+  // ─── POST /urls/bulk ──────────────────────────────────────────────────────
+
+  describe('POST /urls/bulk', () => {
+    describe('successful bulk creation', () => {
+      it('should create multiple URLs and return results array', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.create
+          .mockResolvedValueOnce(makeUrl({ shortId: 'aaa1111111' }))
+          .mockResolvedValueOnce(makeUrl({ shortId: 'bbb2222222', originalUrl: 'https://other.com' }));
+
+        const response = await request(app)
+          .post('/urls/bulk')
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            urls: [
+              { originalUrl: 'https://example.com' },
+              { originalUrl: 'https://other.com' },
+            ],
+          })
+          .expect(200);
+
+        expect(response.body.results).toHaveLength(2);
+        expect(response.body.results[0]).toHaveProperty('shortUrl');
+        expect(response.body.results[1]).toHaveProperty('shortUrl');
+      });
+
+      it('should return partial success when some items fail', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.create
+          .mockResolvedValueOnce(makeUrl({ shortId: 'aaa1111111' }))
+          .mockRejectedValueOnce(new Error('DB error'));
+
+        const response = await request(app)
+          .post('/urls/bulk')
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            urls: [
+              { originalUrl: 'https://example.com' },
+              { originalUrl: 'https://other.com' },
+            ],
+          })
+          .expect(200);
+
+        expect(response.body.results[0]).toHaveProperty('shortUrl');
+        expect(response.body.results[1]).toHaveProperty('error');
+      });
+
+      it('should return per-item validation error without failing other items', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.create.mockResolvedValue(makeUrl({ shortId: 'aaa1111111' }));
+
+        const response = await request(app)
+          .post('/urls/bulk')
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            urls: [
+              { originalUrl: 'https://example.com' },
+              { originalUrl: 'not-a-valid-url' },
+            ],
+          })
+          .expect(200);
+
+        expect(response.body.results[0]).toHaveProperty('shortUrl');
+        expect(response.body.results[1]).toHaveProperty('error');
+        expect(response.body.results[1].error).toContain('Invalid URL');
+      });
+
+      it('should publish url_created event for each successful item', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.create
+          .mockResolvedValueOnce(makeUrl({ shortId: 'aaa1111111' }))
+          .mockResolvedValueOnce(makeUrl({ shortId: 'bbb2222222' }));
+
+        await request(app)
+          .post('/urls/bulk')
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            urls: [
+              { originalUrl: 'https://example.com' },
+              { originalUrl: 'https://other.com' },
+            ],
+          })
+          .expect(200);
+
+        expect(mockEventPublisher.publishUrlCreated).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    describe('validation', () => {
+      it('should return 400 when urls is not an array', async () => {
+        const token = generateTestToken(regularUser);
+
+        const response = await request(app)
+          .post('/urls/bulk')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ urls: 'not-an-array' })
+          .expect(400);
+
+        expect(response.body.error).toContain('urls must be an array');
+      });
+
+      it('should return 400 when urls is empty', async () => {
+        const token = generateTestToken(regularUser);
+
+        const response = await request(app)
+          .post('/urls/bulk')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ urls: [] })
+          .expect(400);
+
+        expect(response.body.error).toContain('must not be empty');
+      });
+
+      it('should return 400 when urls exceeds 50 items', async () => {
+        const token = generateTestToken(regularUser);
+        const tooMany = Array.from({ length: 51 }, () => ({ originalUrl: 'https://example.com' }));
+
+        const response = await request(app)
+          .post('/urls/bulk')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ urls: tooMany })
+          .expect(400);
+
+        expect(response.body.error).toContain('50');
+      });
+
+      it('should require authentication', async () => {
+        await request(app)
+          .post('/urls/bulk')
+          .send({ urls: [{ originalUrl: 'https://example.com' }] })
+          .expect(401);
+      });
+    });
+  });
+
+  // ─── UTM Params ───────────────────────────────────────────────────────────
+
+  describe('utmParams', () => {
+    describe('POST /urls with utmParams', () => {
+      it('should store utmParams when provided', async () => {
+        const token = generateTestToken(regularUser);
+        const utmParams = { utm_source: 'twitter', utm_medium: 'social' };
+        mockPrismaURL.create.mockImplementation((args: any) =>
+          Promise.resolve(makeUrl({ shortId: args.data.shortId, utmParams: args.data.utmParams }))
+        );
+
+        await request(app)
+          .post('/urls')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com', utmParams })
+          .expect(200);
+
+        expect(mockPrismaURL.create.mock.calls[0][0].data.utmParams).toEqual(utmParams);
+      });
+
+      it('should return 400 for utmParams that is an array', async () => {
+        const token = generateTestToken(regularUser);
+
+        const response = await request(app)
+          .post('/urls')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com', utmParams: ['invalid'] })
+          .expect(400);
+
+        expect(response.body.error).toContain('utmParams must be a plain object');
+      });
+
+      it('should return 400 for utmParams with non-string/number values', async () => {
+        const token = generateTestToken(regularUser);
+
+        const response = await request(app)
+          .post('/urls')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com', utmParams: { utm_source: { nested: true } } })
+          .expect(400);
+
+        expect(response.body.error).toContain('utmParams');
+      });
+    });
+
+    describe('PUT /urls/:id with utmParams', () => {
+      it('should update utmParams when provided', async () => {
+        const token = generateTestToken(regularUser);
+        const utmParams = { utm_campaign: 'launch' };
+        mockPrismaURL.update.mockResolvedValue(makeUrl({ utmParams }));
+
+        await request(app)
+          .put('/urls/1')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com', utmParams })
+          .expect(200);
+
+        expect(mockPrismaURL.update.mock.calls[0][0].data.utmParams).toEqual(utmParams);
+      });
+
+      it('should remove utmParams when set to null', async () => {
+        const token = generateTestToken(regularUser);
+        mockPrismaURL.update.mockResolvedValue(makeUrl({ utmParams: null }));
+
+        await request(app)
+          .put('/urls/1')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ originalUrl: 'https://example.com', utmParams: null })
+          .expect(200);
+
+        expect(mockPrismaURL.update.mock.calls[0][0].data.utmParams).toBeNull();
+      });
     });
   });
 
