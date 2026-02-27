@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const { createLogger } = require('shared/utils/logger');
 const { isValidUrl, validateRequiredFields, validationError } = require('shared/utils/validation');
 const { generateShortId } = require('../services/url.service');
+const { invalidateUrlCache } = require('./redirect.controller');
 
 const logger = createLogger('url-service');
 
@@ -72,7 +73,7 @@ const validateUtmParams = (utmParams) => {
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 100;
 
-const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }) => {
+const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis }) => {
   const listUrls = async (req, res) => {
     const { user: { id: userId } } = req;
 
@@ -375,6 +376,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
 
     try {
       const updatedUrl = await prisma.uRL.update({ where: { userId, id: urlId }, data });
+      await invalidateUrlCache(redis, updatedUrl);
       eventPublisher.publishUrlUpdated(sanitizeForEvent(updatedUrl));
       res.json(updatedUrl);
     } catch (error) {
@@ -404,6 +406,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
 
     try {
       const deletedUrl = await prisma.uRL.delete({ where: { id: urlId, userId } });
+      await invalidateUrlCache(redis, deletedUrl);
       eventPublisher.publishUrlDeleted(sanitizeForEvent(deletedUrl));
       res.sendStatus(204);
     } catch (error) {

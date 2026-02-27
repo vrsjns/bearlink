@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
+const Redis = require('ioredis');
 
 const { connectRabbitMQ } = require('shared/utils/rabbitmq');
 const { createLogger } = require('shared/utils/logger');
@@ -12,6 +13,20 @@ const prisma = new PrismaClient();
 
 const port = process.env.PORT || 5000;
 const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
+
+// Redis client — connection errors are logged but don't crash the service
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+  lazyConnect: true,
+  enableOfflineQueue: false,
+  maxRetriesPerRequest: 1,
+});
+
+redis.on('connect', () => logger.info('Connected to Redis'));
+redis.on('error', (err) => logger.error('Redis error', { error: err.message }));
+
+redis.connect().catch((err) => {
+  logger.warn('Could not connect to Redis at startup, continuing without cache', { error: err.message });
+});
 
 let rabbitChannel = null;
 
@@ -53,12 +68,13 @@ connectRabbitMQ().then((channel) => {
     }
   });
 
-  const app = createApp({ prisma, eventPublisher, baseUrl, publishPreviewJob });
+  const app = createApp({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis });
 
   app.get('/health', healthHandler);
   app.get('/ready', createReadinessHandler({
     database: async () => { await prisma.$queryRaw`SELECT 1`; },
     rabbitmq: async () => { if (!rabbitChannel) throw new Error('RabbitMQ not connected'); },
+    redis: async () => { await redis.ping(); },
   }));
 
   const server = app.listen(port, () => {
@@ -79,6 +95,8 @@ const gracefulShutdown = server => async () => {
     logger.info('Server closed.');
     await prisma.$disconnect();
     logger.info('Prisma disconnected.');
+    redis.disconnect();
+    logger.info('Redis disconnected.');
     process.exit(0);
   });
 

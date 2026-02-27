@@ -31,6 +31,12 @@ services:
       - JWT_SECRET=your_jwt_secret
       - RABBITMQ_URL=amqp://rabbitmq
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no
+
   url-service:
     <<: *current-user
     build:
@@ -47,10 +53,13 @@ services:
         condition: service_started
       db:
         condition: service_started
+      redis:
+        condition: service_started
     environment:
       - DATABASE_URL=postgresql://postgres:password@db:5432/url_service
       - JWT_SECRET=your_jwt_secret
       - RABBITMQ_URL=amqp://rabbitmq
+      - REDIS_URL=redis://redis:6379
 
   preview-service:
     build:

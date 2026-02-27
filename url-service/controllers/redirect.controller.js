@@ -6,6 +6,8 @@ const { isSafeRedirectUrl } = require('shared/utils/validation');
 
 const logger = createLogger('url-service');
 
+const URL_CACHE_TTL = 60; // seconds
+
 // Known bot / crawler user-agent patterns — still redirect, but don't count clicks
 const BOT_PATTERN =
   /bot|crawl|spider|slurp|google|bingbot|duckduck|baidu|yandex|slackbot|twitterbot|facebookexternalhit|linkedinbot|whatsapp|telegram|curl|wget|python-requests|go-http-client/i;
@@ -22,14 +24,75 @@ const extractClickMetadata = (req) => {
     (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '';
   const geo = geoip.lookup(ip);
   const country = geo?.country || null;
-  return { userAgent, referer, country };
+  return { userAgent, referer, country, ip };
 };
 
 /**
- * Look up a URL by shortId OR customAlias
+ * Look up a URL by shortId OR customAlias, with optional Redis caching.
  */
-const findUrl = (prisma, slug) =>
-  prisma.uRL.findFirst({ where: { OR: [{ shortId: slug }, { customAlias: slug }] } });
+const findUrl = async (prisma, redis, slug) => {
+  if (redis) {
+    try {
+      const cached = await redis.get(`url:${slug}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Rehydrate Date fields
+        if (parsed.expiresAt) parsed.expiresAt = new Date(parsed.expiresAt);
+        if (parsed.createdAt) parsed.createdAt = new Date(parsed.createdAt);
+        if (parsed.previewFetchedAt) parsed.previewFetchedAt = new Date(parsed.previewFetchedAt);
+        return parsed;
+      }
+    } catch (err) {
+      logger.warn('Redis get error, falling back to DB', { error: err.message });
+    }
+  }
+
+  const url = await prisma.uRL.findFirst({
+    where: { OR: [{ shortId: slug }, { customAlias: slug }] },
+  });
+
+  if (url && redis) {
+    try {
+      await redis.setex(`url:${slug}`, URL_CACHE_TTL, JSON.stringify(url));
+    } catch (err) {
+      logger.warn('Redis setex error', { error: err.message });
+    }
+  }
+
+  return url;
+};
+
+/**
+ * Invalidate cache entries for a URL record.
+ */
+const invalidateUrlCache = async (redis, url) => {
+  if (!redis || !url) return;
+  try {
+    const keys = [`url:${url.shortId}`];
+    if (url.customAlias) keys.push(`url:${url.customAlias}`);
+    await redis.del(...keys);
+  } catch (err) {
+    logger.warn('Redis del error during cache invalidation', { error: err.message });
+  }
+};
+
+/**
+ * Check and record click deduplication using Redis.
+ * Returns true if this is a unique click (should be counted), false if duplicate.
+ */
+const isUniqueClick = async (redis, shortId, ip) => {
+  if (!redis) return true; // No Redis → count all clicks
+
+  const hour = Math.floor(Date.now() / 3_600_000);
+  const key = `dedup:${shortId}:${ip}:${hour}`;
+  try {
+    const result = await redis.set(key, '1', 'EX', 3600, 'NX');
+    return result === 'OK'; // OK = newly set = unique; null = already existed = duplicate
+  } catch (err) {
+    logger.warn('Redis dedup error, counting click', { error: err.message });
+    return true; // Fail open: count click if Redis is down
+  }
+};
 
 /**
  * Append UTM params to a destination URL if any are set.
@@ -103,18 +166,19 @@ const buildPreviewPage = (url, slug, destination) => {
 
 /**
  * Create redirect controller with dependencies
- * @param {Object} deps - Dependencies
+ * @param {Object} deps
  * @param {Object} deps.prisma - Prisma client
  * @param {Object} deps.eventPublisher - Event publisher
  * @param {string} deps.baseUrl - Base URL for short links
+ * @param {import('ioredis').Redis} [deps.redis] - Optional Redis client
  * @returns {Object} Controller methods
  */
-const createRedirectController = ({ prisma, eventPublisher, baseUrl }) => {
+const createRedirectController = ({ prisma, eventPublisher, baseUrl, redis }) => {
   const qr = async (req, res) => {
     const { shortId } = req.params;
 
     try {
-      const url = await findUrl(prisma, shortId);
+      const url = await findUrl(prisma, redis, shortId);
 
       if (!url) {
         return res.status(404).json({ error: 'URL not found' });
@@ -139,7 +203,7 @@ const createRedirectController = ({ prisma, eventPublisher, baseUrl }) => {
     const { shortId } = req.params;
 
     try {
-      const url = await findUrl(prisma, shortId);
+      const url = await findUrl(prisma, redis, shortId);
 
       if (!url) {
         return res.status(404).json({ error: 'URL not found' });
@@ -165,21 +229,27 @@ const createRedirectController = ({ prisma, eventPublisher, baseUrl }) => {
         return res.status(200).type('html').send(buildPreviewPage(url, slug, destination));
       }
 
-      const { userAgent, referer, country } = extractClickMetadata(req);
+      const { userAgent, referer, country, ip } = extractClickMetadata(req);
 
       if (!isBot(userAgent)) {
-        await prisma.uRL.update({
-          where: { shortId: url.shortId },
-          data: { clicks: { increment: 1 } },
-        });
+        const unique = await isUniqueClick(redis, url.shortId, ip);
 
-        eventPublisher.publishUrlClicked({
-          shortId: url.shortId,
-          originalUrl: url.originalUrl,
-          referer,
-          userAgent,
-          country,
-        });
+        if (unique) {
+          await prisma.uRL.update({
+            where: { shortId: url.shortId },
+            data: { clicks: { increment: 1 } },
+          });
+
+          eventPublisher.publishUrlClicked({
+            shortId: url.shortId,
+            originalUrl: url.originalUrl,
+            referer,
+            userAgent,
+            country,
+          });
+        } else {
+          logger.info('Duplicate click — not counted', { shortId: url.shortId, ip });
+        }
       } else {
         logger.info('Bot redirect — click not counted', { userAgent, shortId: url.shortId });
       }
@@ -200,7 +270,7 @@ const createRedirectController = ({ prisma, eventPublisher, baseUrl }) => {
     }
 
     try {
-      const url = await findUrl(prisma, shortId);
+      const url = await findUrl(prisma, redis, shortId);
 
       if (!url) {
         return res.status(404).json({ error: 'URL not found' });
@@ -251,4 +321,4 @@ const createRedirectController = ({ prisma, eventPublisher, baseUrl }) => {
   return { qr, redirect, unlock };
 };
 
-module.exports = { createRedirectController };
+module.exports = { createRedirectController, invalidateUrlCache };

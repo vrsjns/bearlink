@@ -12,7 +12,7 @@ const { createRoutes } = require('./routes');
  * @param {string} deps.baseUrl - Base URL for short links
  * @returns {express.Application} Express app
  */
-const createApp = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }) => {
+const createApp = ({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis }) => {
   const app = express();
 
   // Middleware setup
@@ -22,7 +22,7 @@ const createApp = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }) => {
   app.use(createRequestLogger('url-service'));
 
   // Mount routes
-  app.use(createRoutes({ prisma, eventPublisher, baseUrl, publishPreviewJob }));
+  app.use(createRoutes({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis }));
 
   return app;
 };

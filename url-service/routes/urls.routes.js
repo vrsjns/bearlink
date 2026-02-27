@@ -5,15 +5,16 @@ const { createUrlsController } = require('../controllers/urls.controller');
 
 /**
  * Create URLs routes with dependencies
- * @param {Object} deps - Dependencies
+ * @param {Object} deps
  * @param {Object} deps.prisma - Prisma client
  * @param {Object} deps.eventPublisher - Event publisher
  * @param {string} deps.baseUrl - Base URL for short links
+ * @param {import('ioredis').Redis} [deps.redis] - Optional Redis client
  * @returns {express.Router} URLs router
  */
-const createUrlsRoutes = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }) => {
+const createUrlsRoutes = ({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis }) => {
   const router = express.Router();
-  const controller = createUrlsController({ prisma, eventPublisher, baseUrl, publishPreviewJob });
+  const controller = createUrlsController({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis });
 
   router.get('/urls', authenticateJWT, apiLimiter, controller.listUrls);
   router.post('/urls/bulk', authenticateJWT, apiLimiter, controller.createUrlsBulk);
