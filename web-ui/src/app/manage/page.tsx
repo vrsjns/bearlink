@@ -8,6 +8,11 @@ interface URL {
     id: number;
     originalUrl: string;
     shortId: string;
+    customAlias: string | null;
+    redirectType: number;
+    expiresAt: string | null;
+    tags: string[];
+    requireSignature: boolean;
     clicks: number;
     createdAt: string;
     previewTitle: string | null;
@@ -35,7 +40,7 @@ const ManageURLs = () => {
         const fetchUrls = async () => {
             try {
                 const response = await getURLs();
-                setUrls(response.data);
+                setUrls(response.data.data);
             } catch (error) {
                 console.error('Error fetching URLs:', error);
             } finally {
@@ -132,6 +137,17 @@ const ManageURLs = () => {
                                                 {!url.previewFetchedAt && (
                                                     <div className="text-xs text-gray-400 italic mt-0.5">Preview loading...</div>
                                                 )}
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {url.customAlias && (
+                                                        <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">alias: {url.customAlias}</span>
+                                                    )}
+                                                    {url.expiresAt && (
+                                                        <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">Expires: {new Date(url.expiresAt).toLocaleDateString()}</span>
+                                                    )}
+                                                    {url.tags && url.tags.map(tag => (
+                                                        <span key={tag} className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">{tag}</span>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
                                     </td>
