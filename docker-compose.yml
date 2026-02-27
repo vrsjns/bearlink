@@ -52,6 +52,20 @@ services:
       - JWT_SECRET=your_jwt_secret
       - RABBITMQ_URL=amqp://rabbitmq
 
+  preview-service:
+    build:
+      context: ./preview-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_started
+    environment:
+      - REQUEST_TIMEOUT=5
+      - LOG_LEVEL=info
+      - RABBITMQ_URL=amqp://rabbitmq
+
   analytics-service:
     <<: *current-user
     build:

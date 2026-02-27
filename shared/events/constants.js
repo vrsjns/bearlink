@@ -4,6 +4,8 @@
 const QUEUES = Object.freeze({
   EVENTS: 'events',
   EMAIL_NOTIFICATIONS: 'email_notifications',
+  PREVIEW_JOBS: 'preview_jobs',
+  PREVIEW_RESULTS: 'preview_results',
 });
 
 /**

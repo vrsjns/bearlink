@@ -12,7 +12,7 @@ const logger = createLogger('url-service');
  * @param {string} deps.baseUrl - Base URL for short links
  * @returns {Object} Controller methods
  */
-const createUrlsController = ({ prisma, eventPublisher, baseUrl }) => {
+const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }) => {
   const listUrls = async (req, res) => {
     const { user: { id: userId } } = req;
     const urls = await prisma.uRL.findMany({ where: { userId } });
@@ -42,6 +42,10 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl }) => {
       });
 
       eventPublisher.publishUrlCreated(newUrl);
+
+      if (publishPreviewJob) {
+        publishPreviewJob({ urlId: newUrl.id, originalUrl });
+      }
 
       res.json({ shortUrl: `${baseUrl}/${shortId}` });
     } catch (error) {

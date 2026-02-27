@@ -10,11 +10,11 @@ const { createRedirectRoutes } = require('./redirect.routes');
  * @param {string} deps.baseUrl - Base URL for short links
  * @returns {express.Router} Combined router
  */
-const createRoutes = ({ prisma, eventPublisher, baseUrl }) => {
+const createRoutes = ({ prisma, eventPublisher, baseUrl, publishPreviewJob }) => {
   const router = express.Router();
 
   // Mount URLs routes (CRUD operations)
-  router.use(createUrlsRoutes({ prisma, eventPublisher, baseUrl }));
+  router.use(createUrlsRoutes({ prisma, eventPublisher, baseUrl, publishPreviewJob }));
 
   // Mount redirect routes (must be last due to /:shortId pattern)
   router.use(createRedirectRoutes({ prisma, eventPublisher }));
