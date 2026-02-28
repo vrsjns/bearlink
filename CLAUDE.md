@@ -111,6 +111,24 @@ Production manifests for k3s deployment. All resources live in the `bearlink` na
 - Apply: `kubectl apply -f k8s/namespace.yaml && kubectl apply -k k8s/`
 - Cluster provisioning: see [bearlink-infra](https://github.com/vrsjns/bearlink-infra) (Terraform + Ansible)
 
+## Spec-Driven Development
+
+BearLink uses a spec-driven workflow. Feature specs live in `spec/` and are the source
+of truth for planned and active work.
+
+- `spec/_workflow.md` — how the workflow operates end-to-end
+- `spec/_template.md` — copy this to create a new spec
+- `spec/*.md` — one file per feature or epic
+
+**Common prompts:**
+- "Help me write a spec for [feature]"
+- "Generate tasks for spec/my-feature.md"
+- "Implement task N from spec/my-feature.md"
+- "Update docs for spec/my-feature.md"
+
+**Definition of done:** all acceptance criteria pass, `docs/openapi.yaml` and/or `docs/asyncapi.yaml` are updated to reflect new or changed endpoints and events, and the spec status is set to `done`.
+
+
 ## Key Patterns
 
 - All backend services use Express + Prisma ORM
