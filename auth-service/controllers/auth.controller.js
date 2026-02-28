@@ -5,6 +5,15 @@ const { generateToken, sanitizeUser } = require('../services/token.service');
 
 const logger = createLogger('auth-service');
 
+const setTokenCookie = (res, token) => {
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 3600000,
+  });
+};
+
 /**
  * Create auth controller with dependencies
  * @param {Object} deps - Dependencies
@@ -47,7 +56,8 @@ const createAuthController = ({ prisma, eventPublisher }) => {
         text: `Hello ${name},\n\nThank you for registering at BearLink.\n\nBest Regards,\nBearLink Team`,
       });
 
-      res.json({ token: generateToken(user) });
+      setTokenCookie(res, generateToken(user));
+      res.json({ user: sanitizeUser(user) });
     } catch (error) {
       logger.error('Error registering user', { error: error.message });
       res.status(400).json({ error: 'User registration failed.' });
@@ -61,7 +71,8 @@ const createAuthController = ({ prisma, eventPublisher }) => {
       if (!user || !await bcrypt.compare(password, user.password)) {
         return res.status(400).json({ error: 'Invalid email or password.' });
       }
-      res.json({ token: generateToken(user) });
+      setTokenCookie(res, generateToken(user));
+      res.json({ user: sanitizeUser(user) });
     } catch (error) {
       logger.error('Error logging in user', { error: error.message });
       res.status(400).json({ error: 'User login failed.' });

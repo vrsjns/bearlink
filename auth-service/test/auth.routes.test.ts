@@ -4,6 +4,11 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
+const getTokenFromCookie = (res: request.Response): string | undefined => {
+  const cookie = res.headers['set-cookie']?.find((c: string) => c.startsWith('token='));
+  return cookie?.split(';')[0].split('=')[1];
+};
+
 import { createMockPrismaClient, mockPrismaUser, resetPrismaMocks } from './mocks/prisma';
 import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
 
@@ -39,7 +44,7 @@ describe('Auth Routes', () => {
     };
 
     describe('successful registration', () => {
-      it('should register a new user and return a token', async () => {
+      it('should register a new user and set token cookie', async () => {
         const createdUser = {
           id: 1,
           email: validRegistration.email,
@@ -57,11 +62,14 @@ describe('Auth Routes', () => {
           .send(validRegistration)
           .expect(200);
 
-        expect(response.body).toHaveProperty('token');
-        expect(typeof response.body.token).toBe('string');
+        expect(response.body).toHaveProperty('user');
+        expect(response.body).not.toHaveProperty('token');
+
+        const token = getTokenFromCookie(response);
+        expect(token).toBeDefined();
 
         // Verify the token is valid
-        const decoded = jwt.verify(response.body.token, process.env.JWT_SECRET!) as any;
+        const decoded = jwt.verify(token!, process.env.JWT_SECRET!) as any;
         expect(decoded.id).toBe(1);
         expect(decoded.email).toBe(validRegistration.email);
       });
@@ -314,7 +322,7 @@ describe('Auth Routes', () => {
     };
 
     describe('successful login', () => {
-      it('should login with valid credentials and return token', async () => {
+      it('should login with valid credentials and set token cookie', async () => {
         const hashedPassword = await bcrypt.hash(validCredentials.password, 10);
         const existingUser = {
           id: 1,
@@ -333,11 +341,14 @@ describe('Auth Routes', () => {
           .send(validCredentials)
           .expect(200);
 
-        expect(response.body).toHaveProperty('token');
-        expect(typeof response.body.token).toBe('string');
+        expect(response.body).toHaveProperty('user');
+        expect(response.body).not.toHaveProperty('token');
+
+        const token = getTokenFromCookie(response);
+        expect(token).toBeDefined();
 
         // Verify the token contains correct user data
-        const decoded = jwt.verify(response.body.token, process.env.JWT_SECRET!) as any;
+        const decoded = jwt.verify(token!, process.env.JWT_SECRET!) as any;
         expect(decoded.id).toBe(1);
         expect(decoded.email).toBe(validCredentials.email);
         expect(decoded.name).toBe('Test User');
@@ -382,7 +393,8 @@ describe('Auth Routes', () => {
           .send(validCredentials)
           .expect(200);
 
-        const decoded = jwt.verify(response.body.token, process.env.JWT_SECRET!) as any;
+        const token = getTokenFromCookie(response);
+        const decoded = jwt.verify(token!, process.env.JWT_SECRET!) as any;
         expect(decoded.role).toBe('admin');
       });
     });
@@ -533,7 +545,7 @@ describe('Auth Routes', () => {
         })
         .expect(200);
 
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
       expect(mockPrismaUser.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ name: unicodeName }),
@@ -562,7 +574,7 @@ describe('Auth Routes', () => {
         })
         .expect(200);
 
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
     });
 
     it('should handle special characters in password', async () => {
@@ -586,7 +598,7 @@ describe('Auth Routes', () => {
         })
         .expect(200);
 
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
     });
 
     it('should accept valid email formats', async () => {
@@ -614,7 +626,7 @@ describe('Auth Routes', () => {
           .send({ email, password: 'Password123', name: 'Test User' });
 
         expect(response.status).toBe(200);
-        expect(response.body).toHaveProperty('token');
+        expect(response.body).toHaveProperty('user');
       }
     });
 
@@ -660,7 +672,7 @@ describe('Auth Routes', () => {
         }))
         .expect(200);
 
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
     });
   });
 });
