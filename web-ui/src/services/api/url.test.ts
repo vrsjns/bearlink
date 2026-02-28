@@ -64,7 +64,7 @@ describe('URL API Service', () => {
 
       const result = await updateURL(1, 'https://updated.com');
 
-      expect(mocks.put).toHaveBeenCalledWith('/urls/1', { originalURL: 'https://updated.com' });
+      expect(mocks.put).toHaveBeenCalledWith('/urls/1', { originalUrl: 'https://updated.com' });
       expect(result).toEqual(mockResponse);
     });
   });

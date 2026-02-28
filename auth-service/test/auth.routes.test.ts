@@ -4,15 +4,28 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
+const getTokenFromCookie = (res: request.Response): string | undefined => {
+  const cookie = res.headers['set-cookie']?.find((c: string) => c.startsWith('token='));
+  return cookie?.split(';')[0].split('=')[1];
+};
+
 import { createMockPrismaClient, mockPrismaUser, resetPrismaMocks } from './mocks/prisma';
 import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
 
 // Import the REAL app factory - this tests the actual application
 import { createApp } from '../app';
+import { createLoginAttemptStore } from '../services/loginAttempts';
+import { generateCsrfToken } from '../services/csrf.service';
 
 describe('Auth Routes', () => {
   let app: express.Application;
   let mockPrisma: ReturnType<typeof createMockPrismaClient>;
+  let loginAttemptStore: ReturnType<typeof createLoginAttemptStore>;
+
+  const regularUser = { id: 1, email: 'user@example.com', name: 'Regular User', role: 'USER' };
+
+  const generateTestToken = (user: { id: number; email: string; name: string; role: string }) =>
+    jwt.sign(user, process.env.JWT_SECRET!, { expiresIn: '1h' });
 
   beforeEach(() => {
     // Reset all mocks before each test
@@ -20,14 +33,16 @@ describe('Auth Routes', () => {
     resetRabbitMQMocks();
     vi.clearAllMocks();
 
-    // Create fresh mock prisma client
+    // Create fresh mock prisma client and a fresh login attempt store per test
     mockPrisma = createMockPrismaClient();
+    loginAttemptStore = createLoginAttemptStore();
 
     // Create the REAL app with mocked dependencies
     // This tests the actual application that will be deployed
     app = createApp({
       prisma: mockPrisma,
       eventPublisher: mockEventPublisher,
+      loginAttemptStore,
     });
   });
 
@@ -39,7 +54,7 @@ describe('Auth Routes', () => {
     };
 
     describe('successful registration', () => {
-      it('should register a new user and return a token', async () => {
+      it('should register a new user and set token cookie', async () => {
         const createdUser = {
           id: 1,
           email: validRegistration.email,
@@ -57,11 +72,14 @@ describe('Auth Routes', () => {
           .send(validRegistration)
           .expect(200);
 
-        expect(response.body).toHaveProperty('token');
-        expect(typeof response.body.token).toBe('string');
+        expect(response.body).toHaveProperty('user');
+        expect(response.body).not.toHaveProperty('token');
+
+        const token = getTokenFromCookie(response);
+        expect(token).toBeDefined();
 
         // Verify the token is valid
-        const decoded = jwt.verify(response.body.token, process.env.JWT_SECRET!) as any;
+        const decoded = jwt.verify(token!, process.env.JWT_SECRET!) as any;
         expect(decoded.id).toBe(1);
         expect(decoded.email).toBe(validRegistration.email);
       });
@@ -307,6 +325,17 @@ describe('Auth Routes', () => {
     });
   });
 
+  describe('POST /logout', () => {
+    it('should clear the token cookie and return 204', async () => {
+      const response = await request(app)
+        .post('/logout')
+        .expect(204);
+
+      const cookie = response.headers['set-cookie']?.find((c: string) => c.startsWith('token='));
+      expect(cookie).toMatch(/token=;/);
+    });
+  });
+
   describe('POST /login', () => {
     const validCredentials = {
       email: 'test@example.com',
@@ -314,7 +343,7 @@ describe('Auth Routes', () => {
     };
 
     describe('successful login', () => {
-      it('should login with valid credentials and return token', async () => {
+      it('should login with valid credentials and set token cookie', async () => {
         const hashedPassword = await bcrypt.hash(validCredentials.password, 10);
         const existingUser = {
           id: 1,
@@ -333,11 +362,14 @@ describe('Auth Routes', () => {
           .send(validCredentials)
           .expect(200);
 
-        expect(response.body).toHaveProperty('token');
-        expect(typeof response.body.token).toBe('string');
+        expect(response.body).toHaveProperty('user');
+        expect(response.body).not.toHaveProperty('token');
+
+        const token = getTokenFromCookie(response);
+        expect(token).toBeDefined();
 
         // Verify the token contains correct user data
-        const decoded = jwt.verify(response.body.token, process.env.JWT_SECRET!) as any;
+        const decoded = jwt.verify(token!, process.env.JWT_SECRET!) as any;
         expect(decoded.id).toBe(1);
         expect(decoded.email).toBe(validCredentials.email);
         expect(decoded.name).toBe('Test User');
@@ -382,7 +414,8 @@ describe('Auth Routes', () => {
           .send(validCredentials)
           .expect(200);
 
-        const decoded = jwt.verify(response.body.token, process.env.JWT_SECRET!) as any;
+        const token = getTokenFromCookie(response);
+        const decoded = jwt.verify(token!, process.env.JWT_SECRET!) as any;
         expect(decoded.role).toBe('admin');
       });
     });
@@ -488,6 +521,91 @@ describe('Auth Routes', () => {
         expect(response.body.error).toBe('User login failed.');
       });
     });
+
+    describe('account lockout', () => {
+      const lockedEmail = 'lockout@example.com';
+
+      it('should return 429 after 5 failed login attempts', async () => {
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+
+        for (let i = 0; i < 5; i++) {
+          await request(app)
+            .post('/login')
+            .send({ email: lockedEmail, password: 'WrongPassword1' })
+            .expect(400);
+        }
+
+        const response = await request(app)
+          .post('/login')
+          .send({ email: lockedEmail, password: 'WrongPassword1' })
+          .expect(429);
+
+        expect(response.body.error).toContain('Too many failed login attempts');
+      });
+
+      it('should return 429 even with correct credentials when account is locked', async () => {
+        const hashedPassword = await bcrypt.hash('CorrectPassword1', 10);
+        const existingUser = {
+          id: 1,
+          email: lockedEmail,
+          password: hashedPassword,
+          name: 'Test User',
+          role: 'user',
+        };
+
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+        for (let i = 0; i < 5; i++) {
+          await request(app)
+            .post('/login')
+            .send({ email: lockedEmail, password: 'WrongPassword1' })
+            .expect(400);
+        }
+
+        mockPrismaUser.findUnique.mockResolvedValue(existingUser);
+        const response = await request(app)
+          .post('/login')
+          .send({ email: lockedEmail, password: 'CorrectPassword1' })
+          .expect(429);
+
+        expect(response.body.error).toContain('Too many failed login attempts');
+      });
+
+      it('should reset counter on successful login', async () => {
+        const hashedPassword = await bcrypt.hash('CorrectPassword1', 10);
+        const existingUser = {
+          id: 1,
+          email: lockedEmail,
+          password: hashedPassword,
+          name: 'Test User',
+          role: 'user',
+        };
+
+        // 4 failed attempts (one below threshold)
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+        for (let i = 0; i < 4; i++) {
+          await request(app)
+            .post('/login')
+            .send({ email: lockedEmail, password: 'WrongPassword1' })
+            .expect(400);
+        }
+
+        // Successful login clears the counter
+        mockPrismaUser.findUnique.mockResolvedValue(existingUser);
+        await request(app)
+          .post('/login')
+          .send({ email: lockedEmail, password: 'CorrectPassword1' })
+          .expect(200);
+
+        // Subsequent failed attempt should not immediately lock (counter was reset)
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+        const response = await request(app)
+          .post('/login')
+          .send({ email: lockedEmail, password: 'WrongPassword1' })
+          .expect(400);
+
+        expect(response.body.error).toBe('Invalid email or password.');
+      });
+    });
   });
 
   describe('edge cases', () => {
@@ -533,7 +651,7 @@ describe('Auth Routes', () => {
         })
         .expect(200);
 
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
       expect(mockPrismaUser.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ name: unicodeName }),
@@ -562,7 +680,7 @@ describe('Auth Routes', () => {
         })
         .expect(200);
 
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
     });
 
     it('should handle special characters in password', async () => {
@@ -586,7 +704,7 @@ describe('Auth Routes', () => {
         })
         .expect(200);
 
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
     });
 
     it('should accept valid email formats', async () => {
@@ -614,7 +732,7 @@ describe('Auth Routes', () => {
           .send({ email, password: 'Password123', name: 'Test User' });
 
         expect(response.status).toBe(200);
-        expect(response.body).toHaveProperty('token');
+        expect(response.body).toHaveProperty('user');
       }
     });
 
@@ -660,7 +778,86 @@ describe('Auth Routes', () => {
         }))
         .expect(200);
 
-      expect(response.body).toHaveProperty('token');
+      expect(response.body).toHaveProperty('user');
+    });
+  });
+
+  describe('GET /csrf-token', () => {
+    it('should return a CSRF token when authenticated via cookie', async () => {
+      const token = generateTestToken(regularUser);
+
+      const response = await request(app)
+        .get('/csrf-token')
+        .set('Cookie', `token=${token}`)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('csrfToken');
+      expect(typeof response.body.csrfToken).toBe('string');
+      expect(response.body.csrfToken).toBe(generateCsrfToken(token, process.env.JWT_SECRET!));
+    });
+
+    it('should return 401 when no token cookie is present', async () => {
+      const response = await request(app)
+        .get('/csrf-token')
+        .expect(401);
+
+      expect(response.body.error).toBe('Not authenticated.');
+    });
+  });
+
+  describe('CSRF protection on mutating routes', () => {
+    it('should return 403 on POST /logout with cookie auth but no CSRF token', async () => {
+      const token = generateTestToken(regularUser);
+
+      const response = await request(app)
+        .post('/logout')
+        .set('Cookie', `token=${token}`)
+        .expect(403);
+
+      expect(response.body.error).toBe('CSRF token missing.');
+    });
+
+    it('should return 403 on POST /logout with cookie auth and invalid CSRF token', async () => {
+      const token = generateTestToken(regularUser);
+
+      const response = await request(app)
+        .post('/logout')
+        .set('Cookie', `token=${token}`)
+        .set('X-CSRF-Token', 'invalidtoken')
+        .expect(403);
+
+      expect(response.body.error).toBe('Invalid CSRF token.');
+    });
+
+    it('should succeed on POST /logout with cookie auth and valid CSRF token', async () => {
+      const token = generateTestToken(regularUser);
+      const csrfToken = generateCsrfToken(token, process.env.JWT_SECRET!);
+
+      await request(app)
+        .post('/logout')
+        .set('Cookie', `token=${token}`)
+        .set('X-CSRF-Token', csrfToken)
+        .expect(204);
+    });
+
+    it('should skip CSRF check for requests using Bearer token (no cookie)', async () => {
+      const token = generateTestToken(regularUser);
+
+      // POST /logout with Bearer token — no cookie, CSRF middleware skips
+      await request(app)
+        .post('/logout')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+    });
+
+    it('should skip CSRF check for GET requests even with cookie auth', async () => {
+      const token = generateTestToken(regularUser);
+
+      // GET /csrf-token itself — GET is not a mutating method
+      await request(app)
+        .get('/csrf-token')
+        .set('Cookie', `token=${token}`)
+        .expect(200);
     });
   });
 });

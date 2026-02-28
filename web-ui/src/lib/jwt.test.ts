@@ -4,7 +4,6 @@ import { parseJwt, getCurrentUser, JwtPayload } from './jwt';
 describe('JWT Utils', () => {
   describe('parseJwt', () => {
     it('should parse valid JWT token', () => {
-      // Create a valid JWT-like structure (base64 encoded)
       const payload: JwtPayload = {
         id: 1,
         email: 'test@example.com',
@@ -41,7 +40,6 @@ describe('JWT Utils', () => {
         iat: 1600000000,
         exp: 1900000000,
       };
-      // Use URL-safe base64 encoding
       const base64 = btoa(JSON.stringify(payload));
       const urlSafeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_');
       const token = `header.${urlSafeBase64}.signature`;
@@ -57,7 +55,7 @@ describe('JWT Utils', () => {
       vi.clearAllMocks();
     });
 
-    it('should return null when no token exists', () => {
+    it('should return null when no user exists in localStorage', () => {
       (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(null);
 
       const result = getCurrentUser();
@@ -65,8 +63,8 @@ describe('JWT Utils', () => {
       expect(result).toBeNull();
     });
 
-    it('should return parsed user from localStorage token', () => {
-      const payload: JwtPayload = {
+    it('should return parsed user from localStorage', () => {
+      const user: JwtPayload = {
         id: 1,
         email: 'test@example.com',
         name: 'Test User',
@@ -74,18 +72,16 @@ describe('JWT Utils', () => {
         iat: 1600000000,
         exp: 1900000000,
       };
-      const encodedPayload = btoa(JSON.stringify(payload));
-      const token = `header.${encodedPayload}.signature`;
 
-      (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(token);
+      (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(JSON.stringify(user));
 
       const result = getCurrentUser();
 
-      expect(result).toEqual(payload);
+      expect(result).toEqual(user);
     });
 
-    it('should return null for invalid token in localStorage', () => {
-      (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue('invalid-token');
+    it('should return null for invalid JSON in localStorage', () => {
+      (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue('not-valid-json');
 
       const result = getCurrentUser();
 

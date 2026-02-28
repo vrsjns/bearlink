@@ -26,9 +26,10 @@ services:
         condition: service_started
       mailhog:
         condition: service_started
+    env_file:
+      - .env.secrets
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/auth_service
-      - JWT_SECRET=your_jwt_secret
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/auth_service
       - RABBITMQ_URL=amqp://rabbitmq
 
   redis:
@@ -55,9 +56,10 @@ services:
         condition: service_started
       redis:
         condition: service_started
+    env_file:
+      - .env.secrets
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/url_service
-      - JWT_SECRET=your_jwt_secret
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/url_service
       - RABBITMQ_URL=amqp://rabbitmq
       - REDIS_URL=redis://redis:6379
 
@@ -91,9 +93,10 @@ services:
         condition: service_started
       db:
         condition: service_started
+    env_file:
+      - .env.secrets
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/analytics_service
-      - JWT_SECRET=your_jwt_secret
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/analytics_service
       - RABBITMQ_URL=amqp://rabbitmq
 
   notification-service:
@@ -112,11 +115,12 @@ services:
         condition: service_started
       db:
         condition: service_started
+    env_file:
+      - .env.secrets
     environment:
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
       - EMAIL_USER=notification@bear.link
-      - EMAIL_PASS=test_password
       - RABBITMQ_URL=amqp://rabbitmq
 
   web-ui:
@@ -138,9 +142,10 @@ services:
 
   db:
     image: postgres:latest
+    env_file:
+      - .env.secrets
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5432:5432"

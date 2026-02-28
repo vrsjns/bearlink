@@ -24,20 +24,16 @@ vi.mock('axios', () => {
 
 describe('Axios Instance', () => {
   let mockInstance: any;
-  let requestInterceptor: { onFulfilled: Function; onRejected: Function };
   let responseInterceptor: { onFulfilled: Function; onRejected: Function };
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Capture the interceptors when they're registered
     vi.mocked(axios.create).mockImplementation(() => {
       mockInstance = {
         interceptors: {
           request: {
-            use: vi.fn((onFulfilled, onRejected) => {
-              requestInterceptor = { onFulfilled, onRejected };
-            }),
+            use: vi.fn(),
           },
           response: {
             use: vi.fn((onFulfilled, onRejected) => {
@@ -55,11 +51,12 @@ describe('Axios Instance', () => {
   });
 
   describe('createInstance', () => {
-    it('should create axios instance with baseURL', () => {
+    it('should create axios instance with baseURL and withCredentials', () => {
       createInstance('http://api.test.com');
 
       expect(axios.create).toHaveBeenCalledWith({
         baseURL: 'http://api.test.com',
+        withCredentials: true,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -71,42 +68,11 @@ describe('Axios Instance', () => {
 
       expect(axios.create).toHaveBeenCalledWith({
         baseURL: undefined,
+        withCredentials: true,
         headers: {
           'Content-Type': 'application/json',
         },
       });
-    });
-  });
-
-  describe('request interceptor', () => {
-    it('should add token to Authorization header when token exists', () => {
-      (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue('test-token');
-
-      createInstance('http://api.test.com');
-
-      const config = { headers: {} } as any;
-      const result = requestInterceptor.onFulfilled(config);
-
-      expect(result.headers.Authorization).toBe('Bearer test-token');
-    });
-
-    it('should not add Authorization header when no token', () => {
-      (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(null);
-
-      createInstance('http://api.test.com');
-
-      const config = { headers: {} } as any;
-      const result = requestInterceptor.onFulfilled(config);
-
-      expect(result.headers.Authorization).toBeUndefined();
-    });
-
-    it('should reject on request error', async () => {
-      createInstance('http://api.test.com');
-
-      const error = new Error('Request failed');
-
-      await expect(requestInterceptor.onRejected(error)).rejects.toThrow('Request failed');
     });
   });
 
@@ -120,24 +86,22 @@ describe('Axios Instance', () => {
       expect(result).toBe(response);
     });
 
-    it('should handle 401 error by removing token and redirecting', async () => {
+    it('should handle 401 error by removing user and redirecting', async () => {
       createInstance('http://api.test.com');
 
       const error = {
         response: { status: 401 },
       };
 
-      // Mock window.location
       const originalLocation = window.location;
       delete (window as any).location;
       window.location = { href: '' } as any;
 
       await expect(responseInterceptor.onRejected(error)).rejects.toEqual(error);
 
-      expect(localStorage.removeItem).toHaveBeenCalledWith('token');
+      expect(localStorage.removeItem).toHaveBeenCalledWith('user');
       expect(window.location.href).toBe('/login');
 
-      // Restore
       window.location = originalLocation;
     });
 
@@ -148,11 +112,8 @@ describe('Axios Instance', () => {
         response: { status: 500 },
       };
 
-      const originalHref = window.location.href;
-
       await expect(responseInterceptor.onRejected(error)).rejects.toEqual(error);
 
-      // Should not have redirected
       expect(localStorage.removeItem).not.toHaveBeenCalled();
     });
 

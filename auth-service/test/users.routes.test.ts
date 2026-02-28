@@ -522,6 +522,7 @@ describe('Users Routes', () => {
     describe('successful deletion (admin only)', () => {
       it('should delete user as admin', async () => {
         const token = generateTestToken(adminUser);
+        mockPrismaUser.findUnique.mockResolvedValue({ ...regularUser, password: 'hash' });
         mockPrismaUser.delete.mockResolvedValue({ ...regularUser });
 
         await request(app)
@@ -556,6 +557,46 @@ describe('Users Routes', () => {
           .expect(403);
 
         expect(response.body.error).toContain('does not have admin role');
+      });
+
+      it('should return 400 when admin tries to delete their own account', async () => {
+        const token = generateTestToken(adminUser);
+
+        const response = await request(app)
+          .delete(`/users/${adminUser.id}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(400);
+
+        expect(response.body.error).toBe('Admins cannot delete their own account.');
+      });
+    });
+
+    describe('not found', () => {
+      it('should return 404 for non-existent user', async () => {
+        const token = generateTestToken(adminUser);
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+
+        const response = await request(app)
+          .delete('/users/999')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(404);
+
+        expect(response.body.error).toBe('User not found.');
+      });
+    });
+
+    describe('error handling', () => {
+      it('should return 500 on database error', async () => {
+        const token = generateTestToken(adminUser);
+        mockPrismaUser.findUnique.mockResolvedValue({ ...regularUser, password: 'hash' });
+        mockPrismaUser.delete.mockRejectedValue(new Error('Database error'));
+
+        const response = await request(app)
+          .delete(`/users/${regularUser.id}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(500);
+
+        expect(response.body.error).toBe('Failed to delete user.');
       });
     });
   });

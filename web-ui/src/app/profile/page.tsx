@@ -29,8 +29,7 @@ export default function ProfilePage() {
     const [passwordLoading, setPasswordLoading] = useState(false);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) {
+        if (!localStorage.getItem('user')) {
             router.push('/login');
             return;
         }

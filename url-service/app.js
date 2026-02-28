@@ -1,4 +1,5 @@
 const express = require('express');
+const cookieParser = require('cookie-parser');
 const { corsMiddleware } = require('shared/middlewares/cors');
 const { createCorrelationIdMiddleware } = require('shared/middlewares/correlationId');
 const { createRequestLogger } = require('shared/middlewares/requestLogger');
@@ -17,6 +18,7 @@ const createApp = ({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis }
 
   // Middleware setup
   app.use(corsMiddleware);
+  app.use(cookieParser());
   app.use(express.json());
   app.use(createCorrelationIdMiddleware('url-service'));
   app.use(createRequestLogger('url-service'));

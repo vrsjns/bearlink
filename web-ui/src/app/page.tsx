@@ -11,8 +11,7 @@ const Home = () => {
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!localStorage.getItem('user')) {
       router.push('/login');
     } else {
       setIsLoading(false);
