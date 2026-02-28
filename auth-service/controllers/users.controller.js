@@ -97,8 +97,24 @@ const createUsersController = ({ prisma }) => {
 
   const deleteUser = async (req, res) => {
     const userId = parseInt(req.params.userId);
-    await prisma.user.delete({ where: { id: userId } });
-    res.sendStatus(204);
+
+    if (req.user.id === userId) {
+      return res.status(400).json({ error: 'Admins cannot delete their own account.' });
+    }
+
+    try {
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ error: 'User not found.' });
+      }
+
+      await prisma.user.delete({ where: { id: userId } });
+      logger.info('User deleted', { deletedUserId: userId, byUserId: req.user.id });
+      res.sendStatus(204);
+    } catch (error) {
+      logger.error('Error deleting user', { error: error.message, userId });
+      res.status(500).json({ error: 'Failed to delete user.' });
+    }
   };
 
   const getProfile = async (req, res) => {
