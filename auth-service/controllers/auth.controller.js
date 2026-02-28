@@ -21,7 +21,8 @@ const setTokenCookie = (res, token) => {
  * @param {Object} deps.eventPublisher - Event publisher
  * @returns {Object} Controller methods
  */
-const createAuthController = ({ prisma, eventPublisher }) => {
+const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => {
+  const { isLocked, recordFailedAttempt, clearAttempts } = loginAttemptStore;
   const register = async (req, res) => {
     const { email, password, name } = req.body;
 
@@ -67,10 +68,17 @@ const createAuthController = ({ prisma, eventPublisher }) => {
   const login = async (req, res) => {
     const { email, password } = req.body;
     try {
+      if (isLocked(email)) {
+        return res.status(429).json({ error: 'Too many failed login attempts. Try again in 15 minutes.' });
+      }
+
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user || !await bcrypt.compare(password, user.password)) {
+        recordFailedAttempt(email);
         return res.status(400).json({ error: 'Invalid email or password.' });
       }
+
+      clearAttempts(email);
       setTokenCookie(res, generateToken(user));
       res.json({ user: sanitizeUser(user) });
     } catch (error) {

@@ -4,6 +4,7 @@ const { corsMiddleware } = require('shared/middlewares/cors');
 const { createCorrelationIdMiddleware } = require('shared/middlewares/correlationId');
 const { createRequestLogger } = require('shared/middlewares/requestLogger');
 const { createRoutes } = require('./routes');
+const { createLoginAttemptStore } = require('./services/loginAttempts');
 
 /**
  * Create Express app with dependencies
@@ -12,7 +13,7 @@ const { createRoutes } = require('./routes');
  * @param {Object} deps.eventPublisher - Event publisher
  * @returns {express.Application} Express app
  */
-const createApp = ({ prisma, eventPublisher }) => {
+const createApp = ({ prisma, eventPublisher, loginAttemptStore = createLoginAttemptStore() }) => {
   const app = express();
 
   // Middleware setup
@@ -23,7 +24,7 @@ const createApp = ({ prisma, eventPublisher }) => {
   app.use(createRequestLogger('auth-service'));
 
   // Mount routes
-  app.use(createRoutes({ prisma, eventPublisher }));
+  app.use(createRoutes({ prisma, eventPublisher, loginAttemptStore }));
 
   return app;
 };

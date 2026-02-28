@@ -9,11 +9,11 @@ const { createUsersRoutes } = require('./users.routes');
  * @param {Object} deps.eventPublisher - Event publisher
  * @returns {express.Router} Combined router
  */
-const createRoutes = ({ prisma, eventPublisher }) => {
+const createRoutes = ({ prisma, eventPublisher, loginAttemptStore }) => {
   const router = express.Router();
 
   // Mount auth routes (register, login)
-  router.use(createAuthRoutes({ prisma, eventPublisher }));
+  router.use(createAuthRoutes({ prisma, eventPublisher, loginAttemptStore }));
 
   // Mount users routes (profile, users CRUD, password)
   router.use(createUsersRoutes({ prisma }));

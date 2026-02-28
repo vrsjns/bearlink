@@ -14,10 +14,12 @@ import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
 
 // Import the REAL app factory - this tests the actual application
 import { createApp } from '../app';
+import { createLoginAttemptStore } from '../services/loginAttempts';
 
 describe('Auth Routes', () => {
   let app: express.Application;
   let mockPrisma: ReturnType<typeof createMockPrismaClient>;
+  let loginAttemptStore: ReturnType<typeof createLoginAttemptStore>;
 
   beforeEach(() => {
     // Reset all mocks before each test
@@ -25,14 +27,16 @@ describe('Auth Routes', () => {
     resetRabbitMQMocks();
     vi.clearAllMocks();
 
-    // Create fresh mock prisma client
+    // Create fresh mock prisma client and a fresh login attempt store per test
     mockPrisma = createMockPrismaClient();
+    loginAttemptStore = createLoginAttemptStore();
 
     // Create the REAL app with mocked dependencies
     // This tests the actual application that will be deployed
     app = createApp({
       prisma: mockPrisma,
       eventPublisher: mockEventPublisher,
+      loginAttemptStore,
     });
   });
 
@@ -509,6 +513,91 @@ describe('Auth Routes', () => {
 
         expect(response.body).toHaveProperty('error');
         expect(response.body.error).toBe('User login failed.');
+      });
+    });
+
+    describe('account lockout', () => {
+      const lockedEmail = 'lockout@example.com';
+
+      it('should return 429 after 5 failed login attempts', async () => {
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+
+        for (let i = 0; i < 5; i++) {
+          await request(app)
+            .post('/login')
+            .send({ email: lockedEmail, password: 'WrongPassword1' })
+            .expect(400);
+        }
+
+        const response = await request(app)
+          .post('/login')
+          .send({ email: lockedEmail, password: 'WrongPassword1' })
+          .expect(429);
+
+        expect(response.body.error).toContain('Too many failed login attempts');
+      });
+
+      it('should return 429 even with correct credentials when account is locked', async () => {
+        const hashedPassword = await bcrypt.hash('CorrectPassword1', 10);
+        const existingUser = {
+          id: 1,
+          email: lockedEmail,
+          password: hashedPassword,
+          name: 'Test User',
+          role: 'user',
+        };
+
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+        for (let i = 0; i < 5; i++) {
+          await request(app)
+            .post('/login')
+            .send({ email: lockedEmail, password: 'WrongPassword1' })
+            .expect(400);
+        }
+
+        mockPrismaUser.findUnique.mockResolvedValue(existingUser);
+        const response = await request(app)
+          .post('/login')
+          .send({ email: lockedEmail, password: 'CorrectPassword1' })
+          .expect(429);
+
+        expect(response.body.error).toContain('Too many failed login attempts');
+      });
+
+      it('should reset counter on successful login', async () => {
+        const hashedPassword = await bcrypt.hash('CorrectPassword1', 10);
+        const existingUser = {
+          id: 1,
+          email: lockedEmail,
+          password: hashedPassword,
+          name: 'Test User',
+          role: 'user',
+        };
+
+        // 4 failed attempts (one below threshold)
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+        for (let i = 0; i < 4; i++) {
+          await request(app)
+            .post('/login')
+            .send({ email: lockedEmail, password: 'WrongPassword1' })
+            .expect(400);
+        }
+
+        // Successful login clears the counter
+        mockPrismaUser.findUnique.mockResolvedValue(existingUser);
+        await request(app)
+          .post('/login')
+          .send({ email: lockedEmail, password: 'CorrectPassword1' })
+          .expect(200);
+
+        // Subsequent failed attempt should not immediately lock (counter was reset)
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+        const response = await request(app)
+          .post('/login')
+          .send({ email: lockedEmail, password: 'WrongPassword1' })
+          .expect(400);
+
+        expect(response.body.error).toBe('Invalid email or password.');
       });
     });
   });

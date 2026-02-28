@@ -9,9 +9,9 @@ const { createAuthController } = require('../controllers/auth.controller');
  * @param {Object} deps.eventPublisher - Event publisher
  * @returns {express.Router} Auth router
  */
-const createAuthRoutes = ({ prisma, eventPublisher }) => {
+const createAuthRoutes = ({ prisma, eventPublisher, loginAttemptStore }) => {
   const router = express.Router();
-  const controller = createAuthController({ prisma, eventPublisher });
+  const controller = createAuthController({ prisma, eventPublisher, loginAttemptStore });
 
   router.post('/register', authLimiter, controller.register);
   router.post('/login', authLimiter, controller.login);
