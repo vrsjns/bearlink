@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "URL" ALTER COLUMN "tags" DROP DEFAULT;
