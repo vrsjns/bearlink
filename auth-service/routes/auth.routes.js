@@ -13,6 +13,7 @@ const createAuthRoutes = ({ prisma, eventPublisher, loginAttemptStore }) => {
   const router = express.Router();
   const controller = createAuthController({ prisma, eventPublisher, loginAttemptStore });
 
+  router.get('/csrf-token', controller.getCsrfToken);
   router.post('/register', authLimiter, controller.register);
   router.post('/login', authLimiter, controller.login);
   router.post('/logout', controller.logout);

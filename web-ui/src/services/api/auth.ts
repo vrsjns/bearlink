@@ -2,10 +2,49 @@ import createInstance from '@/lib/axios';
 
 const authApiClient = createInstance(process.env.NEXT_PUBLIC_AUTH_SERVICE_URL);
 
+// In-memory CSRF token — tied to the current JWT cookie value.
+// Fetched after login/register; lazily re-fetched on first mutating request
+// after a page reload (if the user is already logged in).
+let csrfToken: string | null = null;
+
+export const refreshCsrfToken = async (): Promise<void> => {
+    try {
+        const response = await authApiClient.get('/csrf-token');
+        csrfToken = response.data.csrfToken;
+    } catch {
+        csrfToken = null;
+    }
+};
+
+export const clearCsrfToken = (): void => {
+    csrfToken = null;
+};
+
+const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete']);
+
+// Attach CSRF header to all state-mutating requests.
+// Lazily fetches the token when it is missing and the user is logged in,
+// handling the page-refresh case without explicit app-load wiring.
+authApiClient.interceptors.request.use(async (config) => {
+    const method = (config.method || '').toLowerCase();
+    if (!MUTATING_METHODS.has(method)) return config;
+
+    if (!csrfToken && typeof window !== 'undefined' && localStorage.getItem('user')) {
+        await refreshCsrfToken();
+    }
+
+    if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken;
+    }
+
+    return config;
+});
+
 export const login = async (email: string, password: string) => {
     try {
         const response = await authApiClient.post('/login', { email, password });
         localStorage.setItem('user', JSON.stringify(response.data.user));
+        await refreshCsrfToken();
     } catch (error) {
         console.error(error);
         throw new Error('Invalid credentials');
@@ -16,6 +55,7 @@ export const register = async (email: string, password: string, name: string) =>
     try {
         const response = await authApiClient.post('/register', { email, password, name });
         localStorage.setItem('user', JSON.stringify(response.data.user));
+        await refreshCsrfToken();
     } catch (error) {
         console.error(error);
         throw new Error('Registration failed');
@@ -28,6 +68,7 @@ export const logout = async () => {
     } catch {
         // best-effort: clear local state even if server call fails
     } finally {
+        clearCsrfToken();
         localStorage.removeItem('user');
     }
 };

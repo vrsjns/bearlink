@@ -5,6 +5,7 @@ const { createCorrelationIdMiddleware } = require('shared/middlewares/correlatio
 const { createRequestLogger } = require('shared/middlewares/requestLogger');
 const { createRoutes } = require('./routes');
 const { createLoginAttemptStore } = require('./services/loginAttempts');
+const { csrfMiddleware } = require('./middlewares/csrf');
 
 /**
  * Create Express app with dependencies
@@ -22,6 +23,7 @@ const createApp = ({ prisma, eventPublisher, loginAttemptStore = createLoginAtte
   app.use(express.json());
   app.use(createCorrelationIdMiddleware('auth-service'));
   app.use(createRequestLogger('auth-service'));
+  app.use(csrfMiddleware);
 
   // Mount routes
   app.use(createRoutes({ prisma, eventPublisher, loginAttemptStore }));

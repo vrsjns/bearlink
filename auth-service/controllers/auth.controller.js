@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const { createLogger } = require('shared/utils/logger');
 const { isValidEmail, isValidPassword, validateRequiredFields, validationError } = require('shared/utils/validation');
 const { generateToken, sanitizeUser } = require('../services/token.service');
+const { generateCsrfToken } = require('../services/csrf.service');
 
 const logger = createLogger('auth-service');
 
@@ -92,10 +93,19 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
     res.sendStatus(204);
   };
 
+  const getCsrfToken = (req, res) => {
+    const jwtToken = req.cookies?.token;
+    if (!jwtToken) {
+      return res.status(401).json({ error: 'Not authenticated.' });
+    }
+    res.json({ csrfToken: generateCsrfToken(jwtToken, process.env.JWT_SECRET) });
+  };
+
   return {
     register,
     login,
     logout,
+    getCsrfToken,
   };
 };
 

@@ -15,11 +15,17 @@ import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
 // Import the REAL app factory - this tests the actual application
 import { createApp } from '../app';
 import { createLoginAttemptStore } from '../services/loginAttempts';
+import { generateCsrfToken } from '../services/csrf.service';
 
 describe('Auth Routes', () => {
   let app: express.Application;
   let mockPrisma: ReturnType<typeof createMockPrismaClient>;
   let loginAttemptStore: ReturnType<typeof createLoginAttemptStore>;
+
+  const regularUser = { id: 1, email: 'user@example.com', name: 'Regular User', role: 'USER' };
+
+  const generateTestToken = (user: { id: number; email: string; name: string; role: string }) =>
+    jwt.sign(user, process.env.JWT_SECRET!, { expiresIn: '1h' });
 
   beforeEach(() => {
     // Reset all mocks before each test
@@ -773,6 +779,85 @@ describe('Auth Routes', () => {
         .expect(200);
 
       expect(response.body).toHaveProperty('user');
+    });
+  });
+
+  describe('GET /csrf-token', () => {
+    it('should return a CSRF token when authenticated via cookie', async () => {
+      const token = generateTestToken(regularUser);
+
+      const response = await request(app)
+        .get('/csrf-token')
+        .set('Cookie', `token=${token}`)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('csrfToken');
+      expect(typeof response.body.csrfToken).toBe('string');
+      expect(response.body.csrfToken).toBe(generateCsrfToken(token, process.env.JWT_SECRET!));
+    });
+
+    it('should return 401 when no token cookie is present', async () => {
+      const response = await request(app)
+        .get('/csrf-token')
+        .expect(401);
+
+      expect(response.body.error).toBe('Not authenticated.');
+    });
+  });
+
+  describe('CSRF protection on mutating routes', () => {
+    it('should return 403 on POST /logout with cookie auth but no CSRF token', async () => {
+      const token = generateTestToken(regularUser);
+
+      const response = await request(app)
+        .post('/logout')
+        .set('Cookie', `token=${token}`)
+        .expect(403);
+
+      expect(response.body.error).toBe('CSRF token missing.');
+    });
+
+    it('should return 403 on POST /logout with cookie auth and invalid CSRF token', async () => {
+      const token = generateTestToken(regularUser);
+
+      const response = await request(app)
+        .post('/logout')
+        .set('Cookie', `token=${token}`)
+        .set('X-CSRF-Token', 'invalidtoken')
+        .expect(403);
+
+      expect(response.body.error).toBe('Invalid CSRF token.');
+    });
+
+    it('should succeed on POST /logout with cookie auth and valid CSRF token', async () => {
+      const token = generateTestToken(regularUser);
+      const csrfToken = generateCsrfToken(token, process.env.JWT_SECRET!);
+
+      await request(app)
+        .post('/logout')
+        .set('Cookie', `token=${token}`)
+        .set('X-CSRF-Token', csrfToken)
+        .expect(204);
+    });
+
+    it('should skip CSRF check for requests using Bearer token (no cookie)', async () => {
+      const token = generateTestToken(regularUser);
+
+      // POST /logout with Bearer token — no cookie, CSRF middleware skips
+      await request(app)
+        .post('/logout')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+    });
+
+    it('should skip CSRF check for GET requests even with cookie auth', async () => {
+      const token = generateTestToken(regularUser);
+
+      // GET /csrf-token itself — GET is not a mutating method
+      await request(app)
+        .get('/csrf-token')
+        .set('Cookie', `token=${token}`)
+        .expect(200);
     });
   });
 });

@@ -7,7 +7,7 @@ import { logout, isAuthenticated } from './auth';
 vi.mock('@/lib/axios', () => ({
   default: vi.fn(() => ({
     post: vi.fn().mockResolvedValue({}),
-    get: vi.fn(),
+    get: vi.fn().mockResolvedValue({ data: { csrfToken: 'mock-csrf-token' } }),
     put: vi.fn(),
     interceptors: {
       request: { use: vi.fn() },
