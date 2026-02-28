@@ -242,6 +242,12 @@ Tests use Vitest, Supertest (routes), and Testing Library + MSW (web-ui).
 - **REST:** [`docs/openapi.yaml`](docs/openapi.yaml) — OpenAPI 3.0 specification for all service endpoints
 - **Async:** [`docs/asyncapi.yaml`](docs/asyncapi.yaml) — AsyncAPI 2.6 specification for RabbitMQ events
 
+## Planned Work
+
+Feature specs live in [`spec/`](spec/). Each file describes what shall be built and why,
+and is used to generate implementation tasks. See [`spec/_workflow.md`](spec/_workflow.md)
+for how the spec-driven development process works.
+
 ## Observability
 
 The Docker Compose stack includes a pre-configured observability pipeline:
@@ -266,6 +272,7 @@ bearlink/
 ├── infra/                 # Docker infrastructure configs (Loki, Grafana, DB init)
 ├── k8s/                   # Kubernetes manifests for k3s deployment
 ├── docs/                  # OpenAPI and AsyncAPI specs
+├── spec/                  # Feature specs (source of truth for planned work)
 ├── docker-compose.yml
 └── lerna.json
 ```
