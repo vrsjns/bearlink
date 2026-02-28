@@ -79,9 +79,15 @@ const createAuthController = ({ prisma, eventPublisher }) => {
     }
   };
 
+  const logout = (req, res) => {
+    res.clearCookie('token');
+    res.sendStatus(204);
+  };
+
   return {
     register,
     login,
+    logout,
   };
 };
 

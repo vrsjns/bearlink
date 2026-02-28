@@ -315,6 +315,17 @@ describe('Auth Routes', () => {
     });
   });
 
+  describe('POST /logout', () => {
+    it('should clear the token cookie and return 204', async () => {
+      const response = await request(app)
+        .post('/logout')
+        .expect(204);
+
+      const cookie = response.headers['set-cookie']?.find((c: string) => c.startsWith('token='));
+      expect(cookie).toMatch(/token=;/);
+    });
+  });
+
   describe('POST /login', () => {
     const validCredentials = {
       email: 'test@example.com',

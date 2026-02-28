@@ -15,6 +15,7 @@ const createAuthRoutes = ({ prisma, eventPublisher }) => {
 
   router.post('/register', authLimiter, controller.register);
   router.post('/login', authLimiter, controller.login);
+  router.post('/logout', controller.logout);
 
   return router;
 };
