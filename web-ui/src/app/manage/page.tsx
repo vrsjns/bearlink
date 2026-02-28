@@ -31,8 +31,7 @@ const ManageURLs = () => {
     const router = useRouter();
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) {
+        if (!localStorage.getItem('user')) {
             router.push('/login');
             return;
         }

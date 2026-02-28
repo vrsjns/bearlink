@@ -3,11 +3,20 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Navbar from './NavBar';
 
-// Get the mocked router
 const mockPush = vi.fn();
+
+const { mockLogout } = vi.hoisted(() => ({
+  mockLogout: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   usePathname: () => '/',
+}));
+
+vi.mock('../services/api/auth', () => ({
+  logout: mockLogout,
+  isAuthenticated: vi.fn(() => !!localStorage.getItem('user')),
 }));
 
 describe('Navbar Component', () => {
@@ -25,7 +34,7 @@ describe('Navbar Component', () => {
   });
 
   it('should render navigation links when user is logged in', () => {
-    (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue('mock-token');
+    (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(JSON.stringify({ id: 1 }));
 
     render(<Navbar />);
 
@@ -36,18 +45,18 @@ describe('Navbar Component', () => {
   });
 
   it('should handle logout click', async () => {
-    (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue('mock-token');
+    (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(JSON.stringify({ id: 1 }));
     const user = userEvent.setup();
 
     render(<Navbar />);
     await user.click(screen.getByText('Logout'));
 
-    expect(localStorage.removeItem).toHaveBeenCalledWith('token');
+    expect(mockLogout).toHaveBeenCalled();
     expect(mockPush).toHaveBeenCalledWith('/login');
   });
 
   it('should have correct navigation links', () => {
-    (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue('mock-token');
+    (localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue(JSON.stringify({ id: 1 }));
 
     render(<Navbar />);
 

@@ -5,7 +5,7 @@ const authApiClient = createInstance(process.env.NEXT_PUBLIC_AUTH_SERVICE_URL);
 export const login = async (email: string, password: string) => {
     try {
         const response = await authApiClient.post('/login', { email, password });
-        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
     } catch (error) {
         console.error(error);
         throw new Error('Invalid credentials');
@@ -15,20 +15,26 @@ export const login = async (email: string, password: string) => {
 export const register = async (email: string, password: string, name: string) => {
     try {
         const response = await authApiClient.post('/register', { email, password, name });
-        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
     } catch (error) {
         console.error(error);
         throw new Error('Registration failed');
     }
 };
 
-export const logout = () => {
-    localStorage.removeItem('token');
+export const logout = async () => {
+    try {
+        await authApiClient.post('/logout');
+    } catch {
+        // best-effort: clear local state even if server call fails
+    } finally {
+        localStorage.removeItem('user');
+    }
 };
 
 export const isAuthenticated = () => {
     if (typeof window === 'undefined') return false;
-    return !!localStorage.getItem('token');
+    return !!localStorage.getItem('user');
 };
 
 export const forgotPassword = async (email: string) => {
@@ -71,10 +77,6 @@ export interface ChangePasswordData {
 }
 
 export const fetchUserProfile = async (): Promise<UserProfile> => {
-    if (!isAuthenticated()) {
-        throw new Error('Not authenticated');
-    }
-
     try {
         const response = await authApiClient.get('/profile');
         return response.data;
@@ -85,16 +87,8 @@ export const fetchUserProfile = async (): Promise<UserProfile> => {
 };
 
 export const updateUserProfile = async (userId: number, data: UpdateProfileData): Promise<UserProfile> => {
-    if (!isAuthenticated()) {
-        throw new Error('Not authenticated');
-    }
-
     try {
         const response = await authApiClient.put(`/users/${userId}`, data);
-        // Update localStorage token if a new one was returned
-        if (response.data.token) {
-            localStorage.setItem('token', response.data.token);
-        }
         return response.data.user;
     } catch (error: unknown) {
         console.error(error);
@@ -115,10 +109,6 @@ export const updateUserProfile = async (userId: number, data: UpdateProfileData)
 };
 
 export const changePassword = async (userId: number, data: ChangePasswordData): Promise<void> => {
-    if (!isAuthenticated()) {
-        throw new Error('Not authenticated');
-    }
-
     try {
         await authApiClient.post(`/users/${userId}/password`, data);
     } catch (error: unknown) {

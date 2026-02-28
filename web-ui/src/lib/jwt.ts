@@ -30,9 +30,13 @@ export const getCurrentUser = (): JwtPayload | null => {
     if (typeof window === 'undefined') {
         return null;
     }
-    const token = localStorage.getItem('token');
-    if (!token) {
+    const raw = localStorage.getItem('user');
+    if (!raw) {
         return null;
     }
-    return parseJwt(token);
+    try {
+        return JSON.parse(raw) as JwtPayload;
+    } catch {
+        return null;
+    }
 };
