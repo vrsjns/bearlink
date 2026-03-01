@@ -11,8 +11,116 @@ env:
   OWNER: vrsjns
 
 jobs:
+  detect-changes:
+    name: Detect changed services
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect path changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            auth-service:
+              - 'auth-service/**'
+            url-service:
+              - 'url-service/**'
+            analytics-service:
+              - 'analytics-service/**'
+            notification-service:
+              - 'notification-service/**'
+            web-ui:
+              - 'web-ui/**'
+            preview-service:
+              - 'preview-service/**'
+            shared:
+              - 'shared/**'
+              - 'tools/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'lerna.json'
+
+      - name: Build matrix
+        id: set-matrix
+        env:
+          FILTER_AUTH:         ${{ steps.filter.outputs.auth-service }}
+          FILTER_URL:          ${{ steps.filter.outputs.url-service }}
+          FILTER_ANALYTICS:    ${{ steps.filter.outputs.analytics-service }}
+          FILTER_NOTIFICATION: ${{ steps.filter.outputs.notification-service }}
+          FILTER_WEBUI:        ${{ steps.filter.outputs.web-ui }}
+          FILTER_PREVIEW:      ${{ steps.filter.outputs.preview-service }}
+          FILTER_SHARED:       ${{ steps.filter.outputs.shared }}
+          GITHUB_REF:          ${{ github.ref }}
+          GITHUB_EVENT:        ${{ github.event_name }}
+        run: |
+          declare -a ALL_SERVICES=(
+            "auth-service|.|auth-service/Dockerfile"
+            "url-service|.|url-service/Dockerfile"
+            "analytics-service|.|analytics-service/Dockerfile"
+            "notification-service|.|notification-service/Dockerfile"
+            "web-ui|.|web-ui/Dockerfile"
+            "preview-service|preview-service|preview-service/Dockerfile"
+          )
+
+          declare -A USES_SHARED=(
+            ["auth-service"]=1
+            ["url-service"]=1
+            ["analytics-service"]=1
+            ["notification-service"]=1
+          )
+
+          declare -A FILTER_FLAG=(
+            ["auth-service"]="$FILTER_AUTH"
+            ["url-service"]="$FILTER_URL"
+            ["analytics-service"]="$FILTER_ANALYTICS"
+            ["notification-service"]="$FILTER_NOTIFICATION"
+            ["web-ui"]="$FILTER_WEBUI"
+            ["preview-service"]="$FILTER_PREVIEW"
+          )
+
+          if [[ "$GITHUB_REF" == refs/tags/* ]] || [[ "$GITHUB_EVENT" == "workflow_dispatch" ]]; then
+            INCLUDE_ALL=true
+          else
+            INCLUDE_ALL=false
+          fi
+
+          ENTRIES="[]"
+
+          for record in "${ALL_SERVICES[@]}"; do
+            IFS='|' read -r svc ctx dkr <<< "$record"
+
+            if [[ "$INCLUDE_ALL" == "true" ]]; then
+              should_build=true
+            else
+              flag="${FILTER_FLAG[$svc]}"
+              if [[ "$flag" == "true" ]]; then
+                should_build=true
+              elif [[ "$FILTER_SHARED" == "true" ]] && [[ -n "${USES_SHARED[$svc]}" ]]; then
+                should_build=true
+              else
+                should_build=false
+              fi
+            fi
+
+            if [[ "$should_build" == "true" ]]; then
+              entry=$(printf '{"service":"%s","context":"%s","dockerfile":"%s"}' "$svc" "$ctx" "$dkr")
+              ENTRIES=$(echo "$ENTRIES" | jq --argjson e "$entry" '. += [$e]')
+            fi
+          done
+
+          echo "matrix=$ENTRIES" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.service }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.matrix != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,25 +129,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - service: auth-service
-            context: .
-            dockerfile: auth-service/Dockerfile
-          - service: url-service
-            context: .
-            dockerfile: url-service/Dockerfile
-          - service: analytics-service
-            context: .
-            dockerfile: analytics-service/Dockerfile
-          - service: notification-service
-            context: .
-            dockerfile: notification-service/Dockerfile
-          - service: web-ui
-            context: .
-            dockerfile: web-ui/Dockerfile
-          - service: preview-service
-            context: preview-service
-            dockerfile: preview-service/Dockerfile
+        include: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
 
     steps:
       - name: Checkout repository
