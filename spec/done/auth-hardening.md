@@ -1,6 +1,6 @@
 # Auth Service Hardening
 
-> **Status:** approved
+> **Status:** done
 > **Service(s):** auth-service, shared, web-ui
 > **Priority:** critical
 

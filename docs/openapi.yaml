@@ -74,7 +74,11 @@ paths:
     post:
       tags: [auth]
       summary: User login
-      description: Authenticates user and returns a JWT token
+      description: >
+        Authenticates the user. On success, sets the JWT as an `httpOnly`,
+        `SameSite=strict` cookie named `token`. The token string is **not**
+        included in the response body. After 5 consecutive failed attempts the
+        email is locked out for 15 minutes (429).
       operationId: loginUser
       requestBody:
         required: true
@@ -84,7 +88,13 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Login successful
+          description: Login successful — JWT set as httpOnly cookie
+          headers:
+            Set-Cookie:
+              description: httpOnly JWT cookie
+              schema:
+                type: string
+                example: token=eyJ...; Path=/; HttpOnly; SameSite=Strict
           content:
             application/json:
               schema:
@@ -101,6 +111,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: Account locked after 5 consecutive failed attempts (15-minute cooldown)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /logout:
+    post:
+      tags: [auth]
+      summary: Log out
+      description: Clears the `token` httpOnly cookie and returns 204.
+      operationId: logoutUser
+      security:
+        - cookieAuth: []
+      responses:
+        '204':
+          description: Logged out successfully
+
+  /csrf-token:
+    get:
+      tags: [auth]
+      summary: Get CSRF token
+      description: >
+        Returns a CSRF token derived from the current JWT cookie (HMAC-SHA256).
+        Clients must include this value as the `X-CSRF-Token` header on all
+        state-mutating requests (POST, PUT, PATCH, DELETE) when using cookie
+        authentication.
+      operationId: getCsrfToken
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: CSRF token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  csrfToken:
+                    type: string
+                    example: a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /users:
     get:
@@ -838,7 +892,13 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT token obtained from /login or /register
+      description: JWT token obtained from /login or /register (API clients only)
+
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+      description: JWT stored in an httpOnly, SameSite=strict cookie — set automatically by /login and /register, cleared by /logout
 
   parameters:
     userId:
@@ -913,11 +973,12 @@ components:
 
     AuthResponse:
       type: object
+      description: >
+        Returned by /login and /register. The JWT is delivered as an httpOnly
+        cookie (`Set-Cookie: token=...`), not in the response body.
       properties:
-        token:
-          type: string
-          description: JWT token for authentication
-          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/User'
 
     User:
       type: object
