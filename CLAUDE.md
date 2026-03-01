@@ -120,6 +120,20 @@ of truth for planned and active work.
 - `spec/_template.md` — copy this to create a new spec
 - `spec/*.md` — one file per feature or epic
 
+### Spec lifecycle
+
+| Stage | Where it lives |
+|---|---|
+| `draft` | Branch + open PR — being written and discussed |
+| `approved` | Merged to master — ready to implement |
+| `in-progress` | Spec on master with status updated, implementation on a `feat/` branch |
+| `done` | Spec moved to `spec/done/` on the `feat/` branch, merged to master with the implementation |
+
+**Rules:**
+- Never merge a spec while it is still `draft` — only merge after status is updated to `approved`
+- Never implement directly on master — always use a `feat/` branch
+- When implementation is complete, update spec status to `done` and move it to `spec/done/` as part of the same PR
+
 **Common prompts:**
 - "Help me write a spec for [feature]"
 - "Generate tasks for spec/my-feature.md"
