@@ -1,10 +1,10 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+from bs4 import BeautifulSoup
 from fastapi.testclient import TestClient
 
 from main import app
-from services.scraper import fetch_preview, _get_title, _get_description, _get_image, _get_favicon
-from bs4 import BeautifulSoup
+from services.scraper import _get_description, _get_favicon, _get_image, _get_title, fetch_preview
 
 client = TestClient(app)
 
