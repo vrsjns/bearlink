@@ -111,7 +111,7 @@ jobs:
 
             if [[ "$should_build" == "true" ]]; then
               entry=$(printf '{"service":"%s","context":"%s","dockerfile":"%s"}' "$svc" "$ctx" "$dkr")
-              ENTRIES=$(echo "$ENTRIES" | jq --argjson e "$entry" '. += [$e]')
+              ENTRIES=$(echo "$ENTRIES" | jq -c --argjson e "$entry" '. += [$e]')
             fi
           done
 
