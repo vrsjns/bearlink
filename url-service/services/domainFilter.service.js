@@ -32,8 +32,7 @@ const getHostname = (urlString) => {
  * Check whether a domain matches an entry in a list.
  * Matches exact hostname or any subdomain (e.g. "evil.com" matches "sub.evil.com").
  */
-const matchesDomain = (hostname, entry) =>
-  hostname === entry || hostname.endsWith(`.${entry}`);
+const matchesDomain = (hostname, entry) => hostname === entry || hostname.endsWith(`.${entry}`);
 
 /**
  * Check if a URL is permitted by the domain allowlist/blocklist configuration.

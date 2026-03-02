@@ -14,31 +14,40 @@ const sendEmail = createEmailSender(transporter);
 
 let rabbitChannel = null;
 
-connectRabbitMQ().then(async (channel) => {
-  rabbitChannel = channel;
-  await consumeEmailNotifications(channel, sendEmail, { serviceName: 'notification-service' });
+connectRabbitMQ()
+  .then(async (channel) => {
+    rabbitChannel = channel;
+    await consumeEmailNotifications(channel, sendEmail, { serviceName: 'notification-service' });
 
-  const app = createApp();
+    const app = createApp();
 
-  // Health check endpoints (need access to rabbitChannel and transporter)
-  app.get('/health', healthHandler);
-  app.get('/ready', createReadinessHandler({
-    rabbitmq: async () => { if (!rabbitChannel) throw new Error('RabbitMQ not connected'); },
-    smtp: async () => { await transporter.verify(); },
-  }));
+    // Health check endpoints (need access to rabbitChannel and transporter)
+    app.get('/health', healthHandler);
+    app.get(
+      '/ready',
+      createReadinessHandler({
+        rabbitmq: async () => {
+          if (!rabbitChannel) throw new Error('RabbitMQ not connected');
+        },
+        smtp: async () => {
+          await transporter.verify();
+        },
+      })
+    );
 
-  const server = app.listen(process.env.PORT || 7000, () => {
-    logger.info(`Notification service running on port ${process.env.PORT || 7000}`);
+    const server = app.listen(process.env.PORT || 7000, () => {
+      logger.info(`Notification service running on port ${process.env.PORT || 7000}`);
+    });
+
+    process.on('SIGTERM', gracefulShutdown(server));
+    process.on('SIGINT', gracefulShutdown(server));
+  })
+  .catch((error) => {
+    logger.error('Error connecting to RabbitMQ', { error: error.message });
+    process.exit(1);
   });
 
-  process.on('SIGTERM', gracefulShutdown(server));
-  process.on('SIGINT', gracefulShutdown(server));
-}).catch(error => {
-  logger.error('Error connecting to RabbitMQ', { error: error.message });
-  process.exit(1);
-});
-
-const gracefulShutdown = server => () => {
+const gracefulShutdown = (server) => () => {
   logger.info('Shutting down gracefully...');
 
   server.close(() => {

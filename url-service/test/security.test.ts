@@ -116,7 +116,9 @@ describe('Safe Browsing (checkUrlSafety)', () => {
   });
 
   it('returns false when API returns threat matches', async () => {
-    const fakeHttp = { post: vi.fn().mockResolvedValue({ data: { matches: [{ threatType: 'MALWARE' }] } }) };
+    const fakeHttp = {
+      post: vi.fn().mockResolvedValue({ data: { matches: [{ threatType: 'MALWARE' }] } }),
+    };
     const result = await checkUrlSafety('https://malware.com', 'fake-api-key', fakeHttp);
     expect(result).toBe(false);
   });
@@ -157,7 +159,12 @@ describe('Signed URL service', () => {
     const base = 'http://localhost:5001/abc123';
     const signed = signUrl(base, SECRET, 3600);
     const url = new URL(signed);
-    const result = verifyUrl(base, url.searchParams.get('sig')!, url.searchParams.get('exp')!, SECRET);
+    const result = verifyUrl(
+      base,
+      url.searchParams.get('sig')!,
+      url.searchParams.get('exp')!,
+      SECRET
+    );
     expect(result.valid).toBe(true);
   });
 
@@ -165,7 +172,12 @@ describe('Signed URL service', () => {
     const base = 'http://localhost:5001/abc123';
     const signed = signUrl(base, SECRET, -1); // already expired
     const url = new URL(signed);
-    const result = verifyUrl(base, url.searchParams.get('sig')!, url.searchParams.get('exp')!, SECRET);
+    const result = verifyUrl(
+      base,
+      url.searchParams.get('sig')!,
+      url.searchParams.get('exp')!,
+      SECRET
+    );
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/expired/i);
   });
@@ -189,7 +201,12 @@ describe('Signed URL service', () => {
     const base = 'http://localhost:5001/abc123';
     const signed = signUrl(base, SECRET, 3600);
     const url = new URL(signed);
-    const result = verifyUrl(base, url.searchParams.get('sig')!, url.searchParams.get('exp')!, 'wrong-secret');
+    const result = verifyUrl(
+      base,
+      url.searchParams.get('sig')!,
+      url.searchParams.get('exp')!,
+      'wrong-secret'
+    );
     expect(result.valid).toBe(false);
   });
 });

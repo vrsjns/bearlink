@@ -9,12 +9,14 @@ BearLink is a URL shortening service built as a Node.js/TypeScript monorepo with
 ## Development Commands
 
 ### Full Stack (Docker)
+
 ```bash
 docker compose up --build    # Start all services
 docker compose down          # Stop all services
 ```
 
 ### Monorepo (Lerna)
+
 ```bash
 npm run bootstrap            # Install dependencies across workspaces
 npm run start               # Start all services
@@ -22,7 +24,9 @@ npm run test                # Run tests in all workspaces
 ```
 
 ### Individual Services
+
 Backend services (auth-service, url-service, analytics-service, notification-service):
+
 ```bash
 cd <service-name>
 npm run start               # Start with nodemon (auto-reload)
@@ -31,6 +35,7 @@ npx prisma migrate dev      # Run database migrations
 ```
 
 Frontend (web-ui):
+
 ```bash
 cd web-ui
 npm run dev                 # Next.js dev server
@@ -39,6 +44,7 @@ npm run lint                # ESLint
 ```
 
 Preview service (Python):
+
 ```bash
 cd preview-service
 pip install -r requirements.txt
@@ -47,6 +53,7 @@ pytest                      # Run tests
 ```
 
 ### Kubernetes (k3s)
+
 ```bash
 kubectl kustomize k8s/                    # Preview rendered manifests
 kubectl apply -f k8s/namespace.yaml
@@ -58,24 +65,26 @@ kubectl get pods -n bearlink
 
 ### Services
 
-| Service | Port | Database | Purpose |
-|---------|------|----------|---------|
-| auth-service | 4000 | auth_service | User registration, login, JWT authentication |
-| url-service | 5000 | url_service | URL shortening, redirection, click tracking |
-| analytics-service | 6000 | analytics_service | Event storage and retrieval |
-| notification-service | 7000 | - | Email delivery via SMTP |
-| preview-service | 8000 | - | Link metadata scraping (Python/FastAPI/BeautifulSoup) |
-| web-ui | 3000 | - | Next.js frontend |
+| Service              | Port | Database          | Purpose                                               |
+| -------------------- | ---- | ----------------- | ----------------------------------------------------- |
+| auth-service         | 4000 | auth_service      | User registration, login, JWT authentication          |
+| url-service          | 5000 | url_service       | URL shortening, redirection, click tracking           |
+| analytics-service    | 6000 | analytics_service | Event storage and retrieval                           |
+| notification-service | 7000 | -                 | Email delivery via SMTP                               |
+| preview-service      | 8000 | -                 | Link metadata scraping (Python/FastAPI/BeautifulSoup) |
+| web-ui               | 3000 | -                 | Next.js frontend                                      |
 
 Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (1025/8025)
 
 ### Message Queues (RabbitMQ)
+
 - `events` - Domain events (user_registered, url_created, url_updated, url_deleted, url_clicked)
 - `email_notifications` - Email delivery payloads
 - `preview_jobs` - url-service → preview-service (trigger async metadata scrape)
 - `preview_results` - preview-service → url-service (scraped metadata result)
 
 ### Shared Code (`/shared`)
+
 - `utils/logger.js` - Winston logger (console + file)
 - `utils/rabbitmq.js` - RabbitMQ connection with retry logic
 - `middlewares/auth.js` - JWT authentication (`authenticateJWT`, `isAdmin`, `isSelfOrAdmin`)
@@ -85,15 +94,15 @@ Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (10
 
 Services communicate via RabbitMQ using the shared events module (`shared/events/`).
 
-| Service | Role | Events |
-|---------|------|--------|
-| auth-service | Publisher | `user_registered`, email notifications |
-| url-service | Publisher | `url_created`, `url_updated`, `url_deleted`, `url_clicked`, `preview_jobs` |
-| url-service | Consumer | `preview_results` |
-| analytics-service | Consumer | All domain events (`user_registered`, `url_created`, `url_updated`, `url_deleted`, `url_clicked`) |
-| notification-service | Consumer | Email notifications |
-| preview-service | Consumer | `preview_jobs` |
-| preview-service | Publisher | `preview_results` |
+| Service              | Role      | Events                                                                                            |
+| -------------------- | --------- | ------------------------------------------------------------------------------------------------- |
+| auth-service         | Publisher | `user_registered`, email notifications                                                            |
+| url-service          | Publisher | `url_created`, `url_updated`, `url_deleted`, `url_clicked`, `preview_jobs`                        |
+| url-service          | Consumer  | `preview_results`                                                                                 |
+| analytics-service    | Consumer  | All domain events (`user_registered`, `url_created`, `url_updated`, `url_deleted`, `url_clicked`) |
+| notification-service | Consumer  | Email notifications                                                                               |
+| preview-service      | Consumer  | `preview_jobs`                                                                                    |
+| preview-service      | Publisher | `preview_results`                                                                                 |
 
 See each service's `CLAUDE.md` for implementation details.
 
@@ -122,26 +131,27 @@ of truth for planned and active work.
 
 ### Spec lifecycle
 
-| Stage | Where it lives |
-|---|---|
-| `draft` | Branch + open PR — being written and discussed |
-| `approved` | Merged to master — ready to implement |
-| `in-progress` | Spec on master with status updated, implementation on a `feat/` branch |
-| `done` | Spec moved to `spec/done/` on the `feat/` branch, merged to master with the implementation |
+| Stage         | Where it lives                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| `draft`       | Branch + open PR — being written and discussed                                             |
+| `approved`    | Merged to master — ready to implement                                                      |
+| `in-progress` | Spec on master with status updated, implementation on a `feat/` branch                     |
+| `done`        | Spec moved to `spec/done/` on the `feat/` branch, merged to master with the implementation |
 
 **Rules:**
+
 - Never merge a spec while it is still `draft` — only merge after status is updated to `approved`
 - Never implement directly on master — always use a `feat/` branch
 - When implementation is complete, update spec status to `done` and move it to `spec/done/` as part of the same PR
 
 **Common prompts:**
+
 - "Help me write a spec for [feature]"
 - "Generate tasks for spec/my-feature.md"
 - "Implement task N from spec/my-feature.md"
 - "Update docs for spec/my-feature.md"
 
 **Definition of done:** all acceptance criteria pass, `docs/openapi.yaml` and/or `docs/asyncapi.yaml` are updated to reflect new or changed endpoints and events, and the spec status is set to `done`.
-
 
 ## Key Patterns
 
@@ -154,6 +164,7 @@ of truth for planned and active work.
 ## Environment Variables
 
 Key variables (set via docker-compose or .env files):
+
 - `DATABASE_URL` - PostgreSQL connection string (per-service database)
 - `JWT_SECRET` - Shared JWT signing secret
 - `RABBITMQ_URL` - RabbitMQ connection URL

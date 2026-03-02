@@ -25,7 +25,7 @@ const createRequestLogger = (serviceName) => {
     const originalEnd = res.end;
 
     // Override end to log after response is complete
-    res.end = function(chunk, encoding) {
+    res.end = function (chunk, encoding) {
       // Restore original end
       res.end = originalEnd;
 
@@ -58,7 +58,10 @@ const createRequestLogger = (serviceName) => {
       // Determine log level based on status code
       const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
 
-      logger[level](`${req.method} ${req.originalUrl || req.url} ${statusCode} ${duration}ms`, logData);
+      logger[level](
+        `${req.method} ${req.originalUrl || req.url} ${statusCode} ${duration}ms`,
+        logData
+      );
     };
 
     next();

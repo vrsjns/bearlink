@@ -65,13 +65,13 @@ This service **publishes** events to RabbitMQ and **consumes** `preview_results`
 
 ### Events Published (queue: `events`)
 
-| Trigger | Event | Notes |
-|---------|-------|-------|
-| `POST /urls` | `url_created` | Full URL record (passwordHash stripped) |
-| `PUT /urls/:id` | `url_updated` | Full updated URL record (passwordHash stripped) |
-| `DELETE /urls/:id` | `url_deleted` | Deleted URL record (passwordHash stripped) |
+| Trigger                         | Event         | Notes                                                      |
+| ------------------------------- | ------------- | ---------------------------------------------------------- |
+| `POST /urls`                    | `url_created` | Full URL record (passwordHash stripped)                    |
+| `PUT /urls/:id`                 | `url_updated` | Full updated URL record (passwordHash stripped)            |
+| `DELETE /urls/:id`              | `url_deleted` | Deleted URL record (passwordHash stripped)                 |
 | `GET /:shortId` (human, unique) | `url_clicked` | Includes shortId, originalUrl, referer, userAgent, country |
-| `POST /:shortId/unlock` | `url_clicked` | Same fields as above |
+| `POST /:shortId/unlock`         | `url_clicked` | Same fields as above                                       |
 
 Bot requests (matched by User-Agent) and duplicate clicks from the same IP within the same hour do **not** emit `url_clicked`.
 
@@ -104,9 +104,9 @@ eventPublisher.publishUrlClicked({
 
 Redis is used in **controllers only** (not in rate-limit middleware) to avoid test complexity.
 
-| Feature | Key pattern | TTL | Notes |
-|---------|-------------|-----|-------|
-| URL cache | `url:{slug}` | 60s | Set on cache miss; deleted on update/delete |
+| Feature     | Key pattern                   | TTL   | Notes                                           |
+| ----------- | ----------------------------- | ----- | ----------------------------------------------- |
+| URL cache   | `url:{slug}`                  | 60s   | Set on cache miss; deleted on update/delete     |
 | Click dedup | `dedup:{shortId}:{ip}:{hour}` | 3600s | SET NX — only count first click per IP per hour |
 
 `createRedisRateLimiters` in `services/rateLimiters.js` is available but currently not wired into routes (routes use the shared in-memory limiters). It can be activated by passing the Redis client to route factories.
@@ -117,25 +117,25 @@ Uses `url_service` PostgreSQL database with Prisma ORM.
 
 ### URL Model
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | Int | Primary key |
-| `originalUrl` | String | Destination URL |
-| `shortId` | String (unique) | Auto-generated 10-char nanoid |
-| `customAlias` | String? (unique) | 3-50 chars, `[a-zA-Z0-9_-]` |
-| `redirectType` | Int | 301 or 302 (default 302) |
-| `expiresAt` | DateTime? | Returns 410 after this time |
-| `passwordHash` | String? | bcrypt hash; unlock via POST /:shortId/unlock |
-| `tags` | String[] | Filterable labels |
-| `utmParams` | Json? | Appended to destination URL on redirect |
-| `requireSignature` | Boolean | Default false; enforces HMAC sig on redirect |
-| `clicks` | Int | Incremented on each unique human click |
-| `createdAt` | DateTime | Auto-set |
-| `userId` | Int | Owner's user ID |
-| `previewTitle` | String? | Scraped by preview-service (async) |
-| `previewDescription` | String? | Scraped by preview-service (async) |
-| `previewImageUrl` | String? | Scraped by preview-service (async) |
-| `previewFetchedAt` | DateTime? | When preview metadata was last updated |
+| Field                | Type             | Notes                                         |
+| -------------------- | ---------------- | --------------------------------------------- |
+| `id`                 | Int              | Primary key                                   |
+| `originalUrl`        | String           | Destination URL                               |
+| `shortId`            | String (unique)  | Auto-generated 10-char nanoid                 |
+| `customAlias`        | String? (unique) | 3-50 chars, `[a-zA-Z0-9_-]`                   |
+| `redirectType`       | Int              | 301 or 302 (default 302)                      |
+| `expiresAt`          | DateTime?        | Returns 410 after this time                   |
+| `passwordHash`       | String?          | bcrypt hash; unlock via POST /:shortId/unlock |
+| `tags`               | String[]         | Filterable labels                             |
+| `utmParams`          | Json?            | Appended to destination URL on redirect       |
+| `requireSignature`   | Boolean          | Default false; enforces HMAC sig on redirect  |
+| `clicks`             | Int              | Incremented on each unique human click        |
+| `createdAt`          | DateTime         | Auto-set                                      |
+| `userId`             | Int              | Owner's user ID                               |
+| `previewTitle`       | String?          | Scraped by preview-service (async)            |
+| `previewDescription` | String?          | Scraped by preview-service (async)            |
+| `previewImageUrl`    | String?          | Scraped by preview-service (async)            |
+| `previewFetchedAt`   | DateTime?        | When preview metadata was last updated        |
 
 ## Security Features
 
@@ -145,14 +145,14 @@ Uses `url_service` PostgreSQL database with Prisma ORM.
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `JWT_SECRET` | Yes | Shared JWT signing secret |
-| `RABBITMQ_URL` | Yes | RabbitMQ connection URL |
-| `BASE_URL` | Yes | Public base URL (e.g. `https://brl.ink`) |
-| `REDIS_URL` | No | Redis connection string (default: `redis://localhost:6379`) |
-| `SAFE_BROWSING_API_KEY` | No | Google Safe Browsing API v4 key |
-| `DOMAIN_BLOCKLIST` | No | Comma-separated blocked domains (e.g. `evil.com,bad.org`) |
-| `DOMAIN_ALLOWLIST` | No | Comma-separated allowed domains (takes precedence over blocklist) |
-| `URL_SIGNING_SECRET` | No | HMAC secret for signed URLs |
+| Variable                | Required | Description                                                       |
+| ----------------------- | -------- | ----------------------------------------------------------------- |
+| `DATABASE_URL`          | Yes      | PostgreSQL connection string                                      |
+| `JWT_SECRET`            | Yes      | Shared JWT signing secret                                         |
+| `RABBITMQ_URL`          | Yes      | RabbitMQ connection URL                                           |
+| `BASE_URL`              | Yes      | Public base URL (e.g. `https://brl.ink`)                          |
+| `REDIS_URL`             | No       | Redis connection string (default: `redis://localhost:6379`)       |
+| `SAFE_BROWSING_API_KEY` | No       | Google Safe Browsing API v4 key                                   |
+| `DOMAIN_BLOCKLIST`      | No       | Comma-separated blocked domains (e.g. `evil.com,bad.org`)         |
+| `DOMAIN_ALLOWLIST`      | No       | Comma-separated allowed domains (takes precedence over blocklist) |
+| `URL_SIGNING_SECRET`    | No       | HMAC secret for signed URLs                                       |

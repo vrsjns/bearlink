@@ -1,13 +1,13 @@
 # Run services as current user to avoid permission issues with mounted volumes
 x-user: &current-user
-  user: "${UID:-1000}:${GID:-1000}"
+  user: '${UID:-1000}:${GID:-1000}'
 
 services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - '5672:5672'
+      - '15672:15672'
 
   auth-service:
     <<: *current-user
@@ -16,9 +16,9 @@ services:
       dockerfile: ./auth-service/Dockerfile
     volumes:
       - ./auth-service:/app/auth-service
-      - /app/node_modules  # Avoid overwriting node_modules inside the container
+      - /app/node_modules # Avoid overwriting node_modules inside the container
     ports:
-      - "4000:4000"
+      - '4000:4000'
     depends_on:
       rabbitmq:
         condition: service_started
@@ -35,7 +35,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379'
     command: redis-server --save "" --appendonly no
 
   url-service:
@@ -48,7 +48,7 @@ services:
       - ./url-service:/app/url-service
       - /app/node_modules
     ports:
-      - "5000:5000"
+      - '5000:5000'
     depends_on:
       rabbitmq:
         condition: service_started
@@ -68,7 +68,7 @@ services:
       context: ./preview-service
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - '8000:8000'
     depends_on:
       rabbitmq:
         condition: service_started
@@ -87,7 +87,7 @@ services:
       - ./analytics-service:/app/analytics-service
       - /app/node_modules
     ports:
-      - "6000:6000"
+      - '6000:6000'
     depends_on:
       rabbitmq:
         condition: service_started
@@ -109,7 +109,7 @@ services:
       - ./notification-service:/app/notification-service
       - /app/node_modules
     ports:
-      - "7000:7000"
+      - '7000:7000'
     depends_on:
       rabbitmq:
         condition: service_started
@@ -130,15 +130,15 @@ services:
       - ./web-ui:/app
       - /app/node_modules
     ports:
-      - "3000:3000"
+      - '3000:3000'
     depends_on:
       - auth-service
       - url-service
       - analytics-service
     environment:
-      - NEXT_PUBLIC_AUTH_SERVICE_URL=http://localhost:4000  # URL for the auth-service
-      - NEXT_PUBLIC_URL_SERVICE_URL=http://localhost:5000  # URL for the url-service
-      - NEXT_PUBLIC_ANALYTICS_SERVICE_URL=http://localhost:6000  # URL for the analytics-service
+      - NEXT_PUBLIC_AUTH_SERVICE_URL=http://localhost:4000 # URL for the auth-service
+      - NEXT_PUBLIC_URL_SERVICE_URL=http://localhost:5000 # URL for the url-service
+      - NEXT_PUBLIC_ANALYTICS_SERVICE_URL=http://localhost:6000 # URL for the analytics-service
 
   db:
     image: postgres:latest
@@ -148,7 +148,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - ./infra/db/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
       # - pgdata:/var/lib/postgresql/data
@@ -156,14 +156,14 @@ services:
   mailhog:
     image: mailhog/mailhog
     ports:
-      - "1025:1025"  # SMTP server
-      - "8025:8025"  # Web UI
+      - '1025:1025' # SMTP server
+      - '8025:8025' # Web UI
 
   # Logging infrastructure
   loki:
     image: grafana/loki:2.9.0
     ports:
-      - "3100:3100"
+      - '3100:3100'
     volumes:
       - ./infra/loki/loki-config.yaml:/etc/loki/local-config.yaml
     command: -config.file=/etc/loki/local-config.yaml
@@ -181,7 +181,7 @@ services:
   grafana:
     image: grafana/grafana:10.2.0
     ports:
-      - "3001:3000"
+      - '3001:3000'
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning
       - grafana-data:/var/lib/grafana

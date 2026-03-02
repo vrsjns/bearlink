@@ -35,7 +35,9 @@ describe('URL API Service', () => {
 
   describe('getURL', () => {
     it('should fetch a single URL by id', async () => {
-      const mockResponse = { data: { id: 1, shortCode: 'abc123', originalUrl: 'https://example.com' } };
+      const mockResponse = {
+        data: { id: 1, shortCode: 'abc123', originalUrl: 'https://example.com' },
+      };
       mocks.get.mockResolvedValue(mockResponse);
 
       const result = await getURL(1);
@@ -47,7 +49,9 @@ describe('URL API Service', () => {
 
   describe('createURL', () => {
     it('should create a new shortened URL', async () => {
-      const mockResponse = { data: { id: 1, shortCode: 'xyz789', originalUrl: 'https://newsite.com' } };
+      const mockResponse = {
+        data: { id: 1, shortCode: 'xyz789', originalUrl: 'https://newsite.com' },
+      };
       mocks.post.mockResolvedValue(mockResponse);
 
       const result = await createURL('https://newsite.com');

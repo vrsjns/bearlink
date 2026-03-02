@@ -111,14 +111,17 @@ describe('Logger Utils', () => {
 
       const logSpy = vi.spyOn(logger, 'info');
 
-      runWithContext({
-        correlationId: 'corr-123',
-        serviceName: 'auth-service',
-        userId: 99,
-        operation: 'login',
-      }, () => {
-        logger.info('test message');
-      });
+      runWithContext(
+        {
+          correlationId: 'corr-123',
+          serviceName: 'auth-service',
+          userId: 99,
+          operation: 'login',
+        },
+        () => {
+          logger.info('test message');
+        }
+      );
 
       expect(logSpy).toHaveBeenCalled();
     });
@@ -155,13 +158,16 @@ describe('Logger Utils', () => {
       const { createLogger } = await import('./logger');
       const logger = createLogger('text-service');
 
-      runWithContext({
-        correlationId: 'abc123def456',
-        serviceName: 'my-svc',
-        userId: 42,
-      }, () => {
-        expect(() => logger.info('test with context')).not.toThrow();
-      });
+      runWithContext(
+        {
+          correlationId: 'abc123def456',
+          serviceName: 'my-svc',
+          userId: 42,
+        },
+        () => {
+          expect(() => logger.info('test with context')).not.toThrow();
+        }
+      );
     });
   });
 

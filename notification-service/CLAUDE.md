@@ -68,10 +68,10 @@ await consumeEmailNotifications(channel, sendEmail, { serviceName: 'notification
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `SMTP_HOST` | SMTP server hostname |
-| `SMTP_PORT` | SMTP server port |
+| Variable     | Description                  |
+| ------------ | ---------------------------- |
+| `SMTP_HOST`  | SMTP server hostname         |
+| `SMTP_PORT`  | SMTP server port             |
 | `EMAIL_USER` | SMTP authentication username |
 | `EMAIL_PASS` | SMTP authentication password |
 

@@ -47,13 +47,13 @@ This service **consumes** events from RabbitMQ. It does not publish events.
 
 Consumes **all** domain events from the `events` queue and stores them as audit log entries:
 
-| Event | Publisher | Payload highlights |
-|-------|-----------|--------------------|
-| `user_registered` | auth-service | id, email, name, role, createdAt |
-| `url_created` | url-service | id, originalUrl, shortId, customAlias, tags, utmParams, requireSignature, userId |
-| `url_updated` | url-service | Full updated URL record |
-| `url_deleted` | url-service | id, originalUrl, shortId, userId |
-| `url_clicked` | url-service | shortId, originalUrl, referer, userAgent, country |
+| Event             | Publisher    | Payload highlights                                                               |
+| ----------------- | ------------ | -------------------------------------------------------------------------------- |
+| `user_registered` | auth-service | id, email, name, role, createdAt                                                 |
+| `url_created`     | url-service  | id, originalUrl, shortId, customAlias, tags, utmParams, requireSignature, userId |
+| `url_updated`     | url-service  | Full updated URL record                                                          |
+| `url_deleted`     | url-service  | id, originalUrl, shortId, userId                                                 |
+| `url_clicked`     | url-service  | shortId, originalUrl, referer, userAgent, country                                |
 
 ### Code Pattern
 

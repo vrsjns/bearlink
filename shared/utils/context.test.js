@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  generateCorrelationId,
-  getContext,
-  runWithContext,
-  updateContext,
-} from './context';
+import { generateCorrelationId, getContext, runWithContext, updateContext } from './context';
 
 describe('Context Utils', () => {
   describe('generateCorrelationId', () => {

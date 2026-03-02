@@ -78,10 +78,15 @@ const MAX_PAGE_LIMIT = 100;
 
 const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis }) => {
   const listUrls = async (req, res) => {
-    const { user: { id: userId } } = req;
+    const {
+      user: { id: userId },
+    } = req;
 
     const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(MAX_PAGE_LIMIT, Math.max(1, parseInt(req.query.limit) || DEFAULT_PAGE_LIMIT));
+    const limit = Math.min(
+      MAX_PAGE_LIMIT,
+      Math.max(1, parseInt(req.query.limit) || DEFAULT_PAGE_LIMIT)
+    );
     const skip = (page - 1) * limit;
 
     const where = { userId };
@@ -191,7 +196,18 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
         // Custom alias — single attempt; P2002 means the alias is taken
         try {
           newUrl = await prisma.uRL.create({
-            data: { originalUrl, shortId: generateShortId(), customAlias, userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams, requireSignature },
+            data: {
+              originalUrl,
+              shortId: generateShortId(),
+              customAlias,
+              userId,
+              redirectType,
+              expiresAt: expiresAtDate,
+              passwordHash,
+              tags,
+              utmParams,
+              requireSignature,
+            },
           });
         } catch (error) {
           if (error.code === 'P2002') {
@@ -204,7 +220,17 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
         for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
           try {
             newUrl = await prisma.uRL.create({
-              data: { originalUrl, shortId: generateShortId(), userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams, requireSignature },
+              data: {
+                originalUrl,
+                shortId: generateShortId(),
+                userId,
+                redirectType,
+                expiresAt: expiresAtDate,
+                passwordHash,
+                tags,
+                utmParams,
+                requireSignature,
+              },
             });
             break;
           } catch (error) {
@@ -252,7 +278,9 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     }
 
     if (urls.length > BULK_MAX_ITEMS) {
-      return res.status(400).json({ error: `Bulk create is limited to ${BULK_MAX_ITEMS} URLs per request.` });
+      return res
+        .status(400)
+        .json({ error: `Bulk create is limited to ${BULK_MAX_ITEMS} URLs per request.` });
     }
 
     const results = await Promise.all(
@@ -269,8 +297,10 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
 
         // Per-item validation
         if (!originalUrl) return { error: 'originalUrl is required.' };
-        if (!isValidUrl(originalUrl)) return { error: 'Invalid URL. Must be a valid HTTP or HTTPS URL.' };
-        if (!VALID_REDIRECT_TYPES.includes(redirectType)) return { error: 'redirectType must be 301 or 302.' };
+        if (!isValidUrl(originalUrl))
+          return { error: 'Invalid URL. Must be a valid HTTP or HTTPS URL.' };
+        if (!VALID_REDIRECT_TYPES.includes(redirectType))
+          return { error: 'redirectType must be 301 or 302.' };
 
         if (customAlias !== undefined) {
           const aliasError = validateAlias(customAlias);
@@ -304,7 +334,17 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
           if (customAlias) {
             try {
               newUrl = await prisma.uRL.create({
-                data: { originalUrl, shortId: generateShortId(), customAlias, userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams },
+                data: {
+                  originalUrl,
+                  shortId: generateShortId(),
+                  customAlias,
+                  userId,
+                  redirectType,
+                  expiresAt: expiresAtDate,
+                  passwordHash,
+                  tags,
+                  utmParams,
+                },
               });
             } catch (err) {
               if (err.code === 'P2002') return { error: 'Custom alias is already taken.' };
@@ -314,7 +354,16 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
             for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
               try {
                 newUrl = await prisma.uRL.create({
-                  data: { originalUrl, shortId: generateShortId(), userId, redirectType, expiresAt: expiresAtDate, passwordHash, tags, utmParams },
+                  data: {
+                    originalUrl,
+                    shortId: generateShortId(),
+                    userId,
+                    redirectType,
+                    expiresAt: expiresAtDate,
+                    passwordHash,
+                    tags,
+                    utmParams,
+                  },
                 });
                 break;
               } catch (err) {
@@ -343,7 +392,16 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     const {
       user: { id: userId },
       params: { id },
-      body: { originalUrl, redirectType, customAlias, expiresAt, password, tags, utmParams, requireSignature },
+      body: {
+        originalUrl,
+        redirectType,
+        customAlias,
+        expiresAt,
+        password,
+        tags,
+        utmParams,
+        requireSignature,
+      },
     } = req;
 
     const urlId = Number.parseInt(id, 10);
@@ -428,7 +486,7 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
   const deleteUrl = async (req, res) => {
     const {
       user: { id: userId },
-      params: { id }
+      params: { id },
     } = req;
 
     const urlId = Number.parseInt(id, 10);

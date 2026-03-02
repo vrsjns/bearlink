@@ -21,8 +21,7 @@ const isBot = (ua) => !ua || BOT_PATTERN.test(ua);
 const extractClickMetadata = (req) => {
   const userAgent = req.headers['user-agent'] || null;
   const referer = req.headers['referer'] || req.headers['referrer'] || null;
-  const ip =
-    (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '';
+  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '';
   const geo = geoip.lookup(ip);
   const country = geo?.country || null;
   return { userAgent, referer, country, ip };
@@ -241,7 +240,10 @@ const createRedirectController = ({ prisma, eventPublisher, baseUrl, redis }) =>
 
       if (req.query.preview === '1') {
         const slug = url.customAlias || url.shortId;
-        return res.status(200).type('html').send(buildPreviewPage(url, slug, destination));
+        return res
+          .status(200)
+          .type('html')
+          .send(buildPreviewPage(url, slug, destination));
       }
 
       const { userAgent, referer, country, ip } = extractClickMetadata(req);

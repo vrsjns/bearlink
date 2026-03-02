@@ -39,7 +39,9 @@ const Home = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       <h1 className="text-5xl font-bold mb-8 text-blue-600">BearLink</h1>
-      <p className="mb-8 text-xl text-gray-700">Shorten your URLs with ease and track their performance!</p>
+      <p className="mb-8 text-xl text-gray-700">
+        Shorten your URLs with ease and track their performance!
+      </p>
       <form onSubmit={handleSubmit} className="w-full max-w-md bg-white p-8 rounded shadow">
         <div className="mb-4">
           <label htmlFor="originalUrl" className="block text-gray-700 text-sm font-bold mb-2">
@@ -65,7 +67,10 @@ const Home = () => {
       {shortUrl && (
         <div className="mt-8">
           <p className="text-lg">
-            Short URL: <a href={shortUrl} className="text-blue-600 underline">{shortUrl}</a>
+            Short URL:{' '}
+            <a href={shortUrl} className="text-blue-600 underline">
+              {shortUrl}
+            </a>
           </p>
         </div>
       )}

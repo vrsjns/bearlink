@@ -67,10 +67,7 @@ describe('Auth Routes', () => {
 
         mockPrismaUser.create.mockResolvedValue(createdUser);
 
-        const response = await request(app)
-          .post('/register')
-          .send(validRegistration)
-          .expect(200);
+        const response = await request(app).post('/register').send(validRegistration).expect(200);
 
         expect(response.body).toHaveProperty('user');
         expect(response.body).not.toHaveProperty('token');
@@ -97,10 +94,7 @@ describe('Auth Routes', () => {
 
         mockPrismaUser.create.mockResolvedValue(createdUser);
 
-        await request(app)
-          .post('/register')
-          .send(validRegistration)
-          .expect(200);
+        await request(app).post('/register').send(validRegistration).expect(200);
 
         // Verify prisma.create was called with hashed password
         expect(mockPrismaUser.create).toHaveBeenCalledTimes(1);
@@ -110,7 +104,10 @@ describe('Auth Routes', () => {
         // Password should be hashed (not plain text)
         expect(createCall.data.password).not.toBe(validRegistration.password);
         // Verify it's a valid bcrypt hash
-        const isValidHash = await bcrypt.compare(validRegistration.password, createCall.data.password);
+        const isValidHash = await bcrypt.compare(
+          validRegistration.password,
+          createCall.data.password
+        );
         expect(isValidHash).toBe(true);
       });
 
@@ -127,10 +124,7 @@ describe('Auth Routes', () => {
 
         mockPrismaUser.create.mockResolvedValue(createdUser);
 
-        await request(app)
-          .post('/register')
-          .send(validRegistration)
-          .expect(200);
+        await request(app).post('/register').send(validRegistration).expect(200);
 
         expect(mockEventPublisher.publishUserRegistered).toHaveBeenCalledTimes(1);
         const publishedUser = mockEventPublisher.publishUserRegistered.mock.calls[0][0];
@@ -152,10 +146,7 @@ describe('Auth Routes', () => {
 
         mockPrismaUser.create.mockResolvedValue(createdUser);
 
-        await request(app)
-          .post('/register')
-          .send(validRegistration)
-          .expect(200);
+        await request(app).post('/register').send(validRegistration).expect(200);
 
         expect(mockEventPublisher.publishEmailNotification).toHaveBeenCalledTimes(1);
         const emailPayload = mockEventPublisher.publishEmailNotification.mock.calls[0][0];
@@ -200,10 +191,7 @@ describe('Auth Routes', () => {
       });
 
       it('should return 400 when multiple fields are missing', async () => {
-        const response = await request(app)
-          .post('/register')
-          .send({})
-          .expect(400);
+        const response = await request(app).post('/register').send({}).expect(400);
 
         expect(response.body).toHaveProperty('error');
         expect(response.body.details.missing).toContain('email');
@@ -290,10 +278,7 @@ describe('Auth Routes', () => {
           new Error('Unique constraint failed on the fields: (`email`)')
         );
 
-        const response = await request(app)
-          .post('/register')
-          .send(validRegistration)
-          .expect(400);
+        const response = await request(app).post('/register').send(validRegistration).expect(400);
 
         expect(response.body).toHaveProperty('error');
         expect(response.body.error).toBe('User registration failed.');
@@ -302,10 +287,7 @@ describe('Auth Routes', () => {
       it('should return 400 on database connection error', async () => {
         mockPrismaUser.create.mockRejectedValue(new Error('Database connection failed'));
 
-        const response = await request(app)
-          .post('/register')
-          .send(validRegistration)
-          .expect(400);
+        const response = await request(app).post('/register').send(validRegistration).expect(400);
 
         expect(response.body).toHaveProperty('error');
         expect(response.body.error).toBe('User registration failed.');
@@ -314,10 +296,7 @@ describe('Auth Routes', () => {
       it('should not publish events when registration fails', async () => {
         mockPrismaUser.create.mockRejectedValue(new Error('Database error'));
 
-        await request(app)
-          .post('/register')
-          .send(validRegistration)
-          .expect(400);
+        await request(app).post('/register').send(validRegistration).expect(400);
 
         expect(mockEventPublisher.publishUserRegistered).not.toHaveBeenCalled();
         expect(mockEventPublisher.publishEmailNotification).not.toHaveBeenCalled();
@@ -327,9 +306,7 @@ describe('Auth Routes', () => {
 
   describe('POST /logout', () => {
     it('should clear the token cookie and return 204', async () => {
-      const response = await request(app)
-        .post('/logout')
-        .expect(204);
+      const response = await request(app).post('/logout').expect(204);
 
       const cookie = response.headers['set-cookie']?.find((c: string) => c.startsWith('token='));
       expect(cookie).toMatch(/token=;/);
@@ -357,10 +334,7 @@ describe('Auth Routes', () => {
 
         mockPrismaUser.findUnique.mockResolvedValue(existingUser);
 
-        const response = await request(app)
-          .post('/login')
-          .send(validCredentials)
-          .expect(200);
+        const response = await request(app).post('/login').send(validCredentials).expect(200);
 
         expect(response.body).toHaveProperty('user');
         expect(response.body).not.toHaveProperty('token');
@@ -386,10 +360,7 @@ describe('Auth Routes', () => {
           role: 'user',
         });
 
-        await request(app)
-          .post('/login')
-          .send(validCredentials)
-          .expect(200);
+        await request(app).post('/login').send(validCredentials).expect(200);
 
         expect(mockPrismaUser.findUnique).toHaveBeenCalledTimes(1);
         expect(mockPrismaUser.findUnique).toHaveBeenCalledWith({
@@ -409,10 +380,7 @@ describe('Auth Routes', () => {
 
         mockPrismaUser.findUnique.mockResolvedValue(adminUser);
 
-        const response = await request(app)
-          .post('/login')
-          .send(validCredentials)
-          .expect(200);
+        const response = await request(app).post('/login').send(validCredentials).expect(200);
 
         const token = getTokenFromCookie(response);
         const decoded = jwt.verify(token!, process.env.JWT_SECRET!) as any;
@@ -424,10 +392,7 @@ describe('Auth Routes', () => {
       it('should return 400 when user does not exist', async () => {
         mockPrismaUser.findUnique.mockResolvedValue(null);
 
-        const response = await request(app)
-          .post('/login')
-          .send(validCredentials)
-          .expect(400);
+        const response = await request(app).post('/login').send(validCredentials).expect(400);
 
         expect(response.body).toHaveProperty('error');
         expect(response.body.error).toBe('Invalid email or password.');
@@ -443,10 +408,7 @@ describe('Auth Routes', () => {
           role: 'user',
         });
 
-        const response = await request(app)
-          .post('/login')
-          .send(validCredentials)
-          .expect(400);
+        const response = await request(app).post('/login').send(validCredentials).expect(400);
 
         expect(response.body).toHaveProperty('error');
         expect(response.body.error).toBe('Invalid email or password.');
@@ -455,10 +417,7 @@ describe('Auth Routes', () => {
       it('should return same error for non-existent user and wrong password', async () => {
         // Test non-existent user
         mockPrismaUser.findUnique.mockResolvedValue(null);
-        const response1 = await request(app)
-          .post('/login')
-          .send(validCredentials)
-          .expect(400);
+        const response1 = await request(app).post('/login').send(validCredentials).expect(400);
 
         // Test wrong password
         const hashedPassword = await bcrypt.hash('WrongPassword1', 10);
@@ -469,10 +428,7 @@ describe('Auth Routes', () => {
           name: 'Test User',
           role: 'user',
         });
-        const response2 = await request(app)
-          .post('/login')
-          .send(validCredentials)
-          .expect(400);
+        const response2 = await request(app).post('/login').send(validCredentials).expect(400);
 
         // Error messages should be identical (security best practice)
         expect(response1.body.error).toBe(response2.body.error);
@@ -499,10 +455,7 @@ describe('Auth Routes', () => {
       });
 
       it('should return 400 when body is empty', async () => {
-        const response = await request(app)
-          .post('/login')
-          .send({})
-          .expect(400);
+        const response = await request(app).post('/login').send({}).expect(400);
 
         expect(response.body).toHaveProperty('error');
       });
@@ -512,10 +465,7 @@ describe('Auth Routes', () => {
       it('should return 400 on database error', async () => {
         mockPrismaUser.findUnique.mockRejectedValue(new Error('Database connection failed'));
 
-        const response = await request(app)
-          .post('/login')
-          .send(validCredentials)
-          .expect(400);
+        const response = await request(app).post('/login').send(validCredentials).expect(400);
 
         expect(response.body).toHaveProperty('error');
         expect(response.body.error).toBe('User login failed.');
@@ -771,11 +721,13 @@ describe('Auth Routes', () => {
       const response = await request(app)
         .post('/register')
         .set('Content-Type', 'application/json')
-        .send(JSON.stringify({
-          email: 'test@example.com',
-          password: 'Password123',
-          name: 'Test User',
-        }))
+        .send(
+          JSON.stringify({
+            email: 'test@example.com',
+            password: 'Password123',
+            name: 'Test User',
+          })
+        )
         .expect(200);
 
       expect(response.body).toHaveProperty('user');
@@ -797,9 +749,7 @@ describe('Auth Routes', () => {
     });
 
     it('should return 401 when no token cookie is present', async () => {
-      const response = await request(app)
-        .get('/csrf-token')
-        .expect(401);
+      const response = await request(app).get('/csrf-token').expect(401);
 
       expect(response.body.error).toBe('Not authenticated.');
     });
@@ -844,20 +794,14 @@ describe('Auth Routes', () => {
       const token = generateTestToken(regularUser);
 
       // POST /logout with Bearer token — no cookie, CSRF middleware skips
-      await request(app)
-        .post('/logout')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(204);
+      await request(app).post('/logout').set('Authorization', `Bearer ${token}`).expect(204);
     });
 
     it('should skip CSRF check for GET requests even with cookie auth', async () => {
       const token = generateTestToken(regularUser);
 
       // GET /csrf-token itself — GET is not a mutating method
-      await request(app)
-        .get('/csrf-token')
-        .set('Cookie', `token=${token}`)
-        .expect(200);
+      await request(app).get('/csrf-token').set('Cookie', `token=${token}`).expect(200);
     });
   });
 });

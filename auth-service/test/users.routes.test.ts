@@ -70,10 +70,7 @@ describe('Users Routes', () => {
           password: 'hashedPassword',
         });
 
-        await request(app)
-          .get('/profile')
-          .set('Authorization', `Bearer ${token}`)
-          .expect(200);
+        await request(app).get('/profile').set('Authorization', `Bearer ${token}`).expect(200);
 
         expect(mockPrismaUser.findUnique).toHaveBeenCalledWith({
           where: { id: regularUser.id },
@@ -83,9 +80,7 @@ describe('Users Routes', () => {
 
     describe('authentication errors', () => {
       it('should return 401 without authorization header', async () => {
-        const response = await request(app)
-          .get('/profile')
-          .expect(401);
+        const response = await request(app).get('/profile').expect(401);
 
         expect(response.body.error).toContain('Missing authorization token');
       });
@@ -188,9 +183,7 @@ describe('Users Routes', () => {
       });
 
       it('should return 401 without token', async () => {
-        const response = await request(app)
-          .get('/users')
-          .expect(401);
+        const response = await request(app).get('/users').expect(401);
 
         expect(response.body.error).toContain('Missing authorization token');
       });
@@ -828,9 +821,7 @@ describe('Users Routes', () => {
       expect(profileResponse.body).not.toHaveProperty('password');
 
       // Test GET /users
-      mockPrismaUser.findMany.mockResolvedValue([
-        { ...regularUser, password: 'secretPassword' },
-      ]);
+      mockPrismaUser.findMany.mockResolvedValue([{ ...regularUser, password: 'secretPassword' }]);
 
       const usersResponse = await request(app)
         .get('/users')

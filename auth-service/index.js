@@ -12,33 +12,42 @@ const prisma = new PrismaClient();
 
 let rabbitChannel = null;
 
-connectRabbitMQ().then((channel) => {
-  rabbitChannel = channel;
-  channel.assertQueue(QUEUES.EVENTS);
-  channel.assertQueue(QUEUES.EMAIL_NOTIFICATIONS);
+connectRabbitMQ()
+  .then((channel) => {
+    rabbitChannel = channel;
+    channel.assertQueue(QUEUES.EVENTS);
+    channel.assertQueue(QUEUES.EMAIL_NOTIFICATIONS);
 
-  const eventPublisher = createEventPublisher(channel);
-  const app = createApp({ prisma, eventPublisher });
+    const eventPublisher = createEventPublisher(channel);
+    const app = createApp({ prisma, eventPublisher });
 
-  // Health check endpoints (need access to rabbitChannel)
-  app.get('/health', healthHandler);
-  app.get('/ready', createReadinessHandler({
-    database: async () => { await prisma.$queryRaw`SELECT 1`; },
-    rabbitmq: async () => { if (!rabbitChannel) throw new Error('RabbitMQ not connected'); },
-  }));
+    // Health check endpoints (need access to rabbitChannel)
+    app.get('/health', healthHandler);
+    app.get(
+      '/ready',
+      createReadinessHandler({
+        database: async () => {
+          await prisma.$queryRaw`SELECT 1`;
+        },
+        rabbitmq: async () => {
+          if (!rabbitChannel) throw new Error('RabbitMQ not connected');
+        },
+      })
+    );
 
-  const server = app.listen(process.env.PORT || 4000, () => {
-    logger.info(`Auth service running on port ${process.env.PORT || 4000}`);
+    const server = app.listen(process.env.PORT || 4000, () => {
+      logger.info(`Auth service running on port ${process.env.PORT || 4000}`);
+    });
+
+    process.on('SIGTERM', gracefulShutdown(server));
+    process.on('SIGINT', gracefulShutdown(server));
+  })
+  .catch((error) => {
+    logger.error('Error connecting to RabbitMQ', { error: error.message });
+    process.exit(1);
   });
 
-  process.on('SIGTERM', gracefulShutdown(server));
-  process.on('SIGINT', gracefulShutdown(server));
-}).catch(error => {
-  logger.error('Error connecting to RabbitMQ', { error: error.message });
-  process.exit(1);
-});
-
-const gracefulShutdown = server => async () => {
+const gracefulShutdown = (server) => async () => {
   logger.info('Shutting down gracefully...');
 
   server.close(async () => {

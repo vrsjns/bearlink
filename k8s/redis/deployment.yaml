@@ -18,21 +18,21 @@ spec:
           image: redis:7-alpine
           ports:
             - containerPort: 6379
-          command: ["redis-server", "--save", "", "--appendonly", "no"]
+          command: ['redis-server', '--save', '', '--appendonly', 'no']
           resources:
             requests:
-              memory: "32Mi"
-              cpu: "25m"
+              memory: '32Mi'
+              cpu: '25m'
             limits:
-              memory: "128Mi"
-              cpu: "100m"
+              memory: '128Mi'
+              cpu: '100m'
           readinessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ['redis-cli', 'ping']
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ['redis-cli', 'ping']
             initialDelaySeconds: 10
             periodSeconds: 15

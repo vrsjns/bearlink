@@ -9,4 +9,4 @@ spec:
   ports:
     - port: 5432
       targetPort: 5432
-  clusterIP: None  # Headless — required for StatefulSet DNS (postgres-0.postgres)
+  clusterIP: None # Headless — required for StatefulSet DNS (postgres-0.postgres)

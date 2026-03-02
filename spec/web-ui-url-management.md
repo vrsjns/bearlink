@@ -27,6 +27,7 @@ Current web-ui state:
   ignored.
 
 Backend endpoints already implemented and ready to consume:
+
 - `POST /urls` — accepts `originalUrl`, `customAlias`, `expiresAt`,
   `password`, `tags`, `redirectType`, `utmParams`
 - `PUT /urls/:id` — same fields
@@ -81,7 +82,7 @@ Backend endpoints already implemented and ready to consume:
 
 - **R14:** `createURL` in `src/services/api/url.ts` shall accept an options object
   (`{ originalUrl, customAlias?, expiresAt?, password?, tags?, redirectType?,
-  utmParams? }`) and pass it to `POST /urls`.
+utmParams? }`) and pass it to `POST /urls`.
 - **R15:** `updateURL` in `src/services/api/url.ts` shall accept the same options
   object and pass it to `PUT /urls/:id`.
 - **R16:** `getURLs` shall accept pagination and filter params
@@ -100,22 +101,22 @@ Backend endpoints already implemented and ready to consume:
 ## Acceptance Criteria
 
 - [ ] A URL created with a custom alias resolves to that alias in the short URL
-  displayed after creation.
+      displayed after creation.
 - [ ] Creating a URL with a past expiry date is rejected before the API call is
-  made, with a visible error message.
+      made, with a visible error message.
 - [ ] Creating a URL with a duplicate alias shows a 409 error inline on the alias
-  field.
+      field.
 - [ ] The manage table shows page 1 of 10 by default; Next/Previous navigates
-  correctly.
+      correctly.
 - [ ] Typing in the search bar filters the table without a full page reload, after
-  a 300 ms debounce.
+      a 300 ms debounce.
 - [ ] Selecting a tag from the tag filter shows only URLs with that tag.
 - [ ] Clicking "Download QR" on a row downloads a PNG file named `{shortId}.png`.
 - [ ] Opening the edit modal for a URL pre-populates all fields with current
-  values.
+      values.
 - [ ] Saving the edit modal with a new expiry date updates the badge in the table.
 - [ ] UTM params filled in the builder are appended to the destination URL when
-  the short link is followed.
+      the short link is followed.
 
 ## Out of Scope
 
@@ -130,7 +131,7 @@ Backend endpoints already implemented and ready to consume:
 ## Docs to Update
 
 - [ ] `docs/openapi.yaml` — no new endpoints; existing url-service endpoints are
-  already documented
+      already documented
 
 ## Tasks
 

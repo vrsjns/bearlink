@@ -27,18 +27,18 @@ spec:
             # With the Traefik ingress stripping prefixes, the frontend can use
             # relative paths so it works regardless of the domain:
             - name: NEXT_PUBLIC_AUTH_SERVICE_URL
-              value: "/api/auth"
+              value: '/api/auth'
             - name: NEXT_PUBLIC_URL_SERVICE_URL
-              value: "/api/urls"
+              value: '/api/urls'
             - name: NEXT_PUBLIC_ANALYTICS_SERVICE_URL
-              value: "/api/analytics"
+              value: '/api/analytics'
           resources:
             requests:
-              memory: "128Mi"
-              cpu: "100m"
+              memory: '128Mi'
+              cpu: '100m'
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: '512Mi'
+              cpu: '500m'
           readinessProbe:
             httpGet:
               path: /

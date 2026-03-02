@@ -1,6 +1,11 @@
 const bcrypt = require('bcryptjs');
 const { createLogger } = require('shared/utils/logger');
-const { isValidEmail, isValidPassword, validateRequiredFields, validationError } = require('shared/utils/validation');
+const {
+  isValidEmail,
+  isValidPassword,
+  validateRequiredFields,
+  validationError,
+} = require('shared/utils/validation');
 const { generateToken, sanitizeUser } = require('../services/token.service');
 const { generateCsrfToken } = require('../services/csrf.service');
 
@@ -40,7 +45,10 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
 
     // Validate password strength
     if (!isValidPassword(password)) {
-      return validationError(res, 'Password must be at least 8 characters and contain uppercase, lowercase, and a number');
+      return validationError(
+        res,
+        'Password must be at least 8 characters and contain uppercase, lowercase, and a number'
+      );
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -70,11 +78,13 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
     const { email, password } = req.body;
     try {
       if (isLocked(email)) {
-        return res.status(429).json({ error: 'Too many failed login attempts. Try again in 15 minutes.' });
+        return res
+          .status(429)
+          .json({ error: 'Too many failed login attempts. Try again in 15 minutes.' });
       }
 
       const user = await prisma.user.findUnique({ where: { email } });
-      if (!user || !await bcrypt.compare(password, user.password)) {
+      if (!user || !(await bcrypt.compare(password, user.password))) {
         recordFailedAttempt(email);
         return res.status(400).json({ error: 'Invalid email or password.' });
       }

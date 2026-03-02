@@ -14,7 +14,13 @@ const { createUrlsController } = require('../controllers/urls.controller');
  */
 const createUrlsRoutes = ({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis }) => {
   const router = express.Router();
-  const controller = createUrlsController({ prisma, eventPublisher, baseUrl, publishPreviewJob, redis });
+  const controller = createUrlsController({
+    prisma,
+    eventPublisher,
+    baseUrl,
+    publishPreviewJob,
+    redis,
+  });
 
   router.get('/urls', authenticateJWT, apiLimiter, controller.listUrls);
   router.post('/urls/bulk', authenticateJWT, apiLimiter, controller.createUrlsBulk);

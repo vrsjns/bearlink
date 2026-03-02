@@ -49,7 +49,12 @@ describe('Redis Integration', () => {
     vi.clearAllMocks();
     mockPrisma = createMockPrismaClient();
     // Pass mockRedis as the redis dep — every test in this file uses Redis
-    app = createApp({ prisma: mockPrisma, eventPublisher: mockEventPublisher, baseUrl, redis: mockRedis as any });
+    app = createApp({
+      prisma: mockPrisma,
+      eventPublisher: mockEventPublisher,
+      baseUrl,
+      redis: mockRedis as any,
+    });
   });
 
   // ─── Redirect caching ─────────────────────────────────────────────────────
@@ -70,22 +75,15 @@ describe('Redis Integration', () => {
 
     it('should query DB on a cache miss and then write to cache', async () => {
       const url = makeUrl();
-      mockRedis.get.mockResolvedValue(null);           // cache miss
+      mockRedis.get.mockResolvedValue(null); // cache miss
       mockPrismaURL.findFirst.mockResolvedValue(url);
       mockPrismaURL.update.mockResolvedValue({ ...url, clicks: 6 });
       mockRedis.setex.mockResolvedValue('OK');
 
-      await request(app)
-        .get('/abc1234567')
-        .set('User-Agent', 'Mozilla/5.0')
-        .expect(302);
+      await request(app).get('/abc1234567').set('User-Agent', 'Mozilla/5.0').expect(302);
 
       expect(mockPrismaURL.findFirst).toHaveBeenCalledTimes(1);
-      expect(mockRedis.setex).toHaveBeenCalledWith(
-        'url:abc1234567',
-        60,
-        expect.any(String)
-      );
+      expect(mockRedis.setex).toHaveBeenCalledWith('url:abc1234567', 60, expect.any(String));
     });
 
     it('should rehydrate Date fields from cached JSON', async () => {
@@ -94,10 +92,7 @@ describe('Redis Integration', () => {
       mockPrismaURL.update.mockResolvedValue({ ...url, clicks: 6 });
 
       // Should NOT 410 because expiresAt is in the future
-      await request(app)
-        .get('/abc1234567')
-        .set('User-Agent', 'Mozilla/5.0')
-        .expect(302);
+      await request(app).get('/abc1234567').set('User-Agent', 'Mozilla/5.0').expect(302);
     });
 
     it('should return 410 for expired link served from cache', async () => {
@@ -115,10 +110,7 @@ describe('Redis Integration', () => {
       mockPrismaURL.findFirst.mockResolvedValue(url);
       mockPrismaURL.update.mockResolvedValue({ ...url, clicks: 6 });
 
-      await request(app)
-        .get('/abc1234567')
-        .set('User-Agent', 'Mozilla/5.0')
-        .expect(302);
+      await request(app).get('/abc1234567').set('User-Agent', 'Mozilla/5.0').expect(302);
 
       expect(mockPrismaURL.findFirst).toHaveBeenCalledTimes(1);
     });
@@ -162,10 +154,7 @@ describe('Redis Integration', () => {
       mockPrismaURL.delete.mockResolvedValue(makeUrl());
       mockRedis.del.mockResolvedValue(1);
 
-      await request(app)
-        .delete('/urls/1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(204);
+      await request(app).delete('/urls/1').set('Authorization', `Bearer ${token}`).expect(204);
 
       expect(mockRedis.del).toHaveBeenCalledWith('url:abc1234567');
     });
@@ -191,13 +180,10 @@ describe('Redis Integration', () => {
     it('should count a click when Redis SET NX returns OK (unique)', async () => {
       const url = makeUrl();
       mockRedis.get.mockResolvedValue(JSON.stringify(url));
-      mockRedis.set.mockResolvedValue('OK');   // first click from this IP
+      mockRedis.set.mockResolvedValue('OK'); // first click from this IP
       mockPrismaURL.update.mockResolvedValue({ ...url, clicks: 6 });
 
-      await request(app)
-        .get('/abc1234567')
-        .set('User-Agent', 'Mozilla/5.0')
-        .expect(302);
+      await request(app).get('/abc1234567').set('User-Agent', 'Mozilla/5.0').expect(302);
 
       expect(mockPrismaURL.update).toHaveBeenCalledTimes(1);
       expect(mockEventPublisher.publishUrlClicked).toHaveBeenCalledTimes(1);
@@ -206,12 +192,9 @@ describe('Redis Integration', () => {
     it('should not count a click when Redis SET NX returns null (duplicate)', async () => {
       const url = makeUrl();
       mockRedis.get.mockResolvedValue(JSON.stringify(url));
-      mockRedis.set.mockResolvedValue(null);   // already counted this IP/hour
+      mockRedis.set.mockResolvedValue(null); // already counted this IP/hour
 
-      await request(app)
-        .get('/abc1234567')
-        .set('User-Agent', 'Mozilla/5.0')
-        .expect(302);
+      await request(app).get('/abc1234567').set('User-Agent', 'Mozilla/5.0').expect(302);
 
       expect(mockPrismaURL.update).not.toHaveBeenCalled();
       expect(mockEventPublisher.publishUrlClicked).not.toHaveBeenCalled();
@@ -223,10 +206,7 @@ describe('Redis Integration', () => {
       mockRedis.set.mockResolvedValue('OK');
       mockPrismaURL.update.mockResolvedValue({ ...url, clicks: 6 });
 
-      await request(app)
-        .get('/abc1234567')
-        .set('User-Agent', 'Mozilla/5.0')
-        .expect(302);
+      await request(app).get('/abc1234567').set('User-Agent', 'Mozilla/5.0').expect(302);
 
       const setCall = mockRedis.set.mock.calls[0];
       expect(setCall[0]).toMatch(/^dedup:abc1234567:/);
@@ -242,10 +222,7 @@ describe('Redis Integration', () => {
       mockRedis.set.mockRejectedValue(new Error('Redis down'));
       mockPrismaURL.update.mockResolvedValue({ ...url, clicks: 6 });
 
-      await request(app)
-        .get('/abc1234567')
-        .set('User-Agent', 'Mozilla/5.0')
-        .expect(302);
+      await request(app).get('/abc1234567').set('User-Agent', 'Mozilla/5.0').expect(302);
 
       // Should still count — fail-open behavior
       expect(mockPrismaURL.update).toHaveBeenCalledTimes(1);
@@ -255,10 +232,7 @@ describe('Redis Integration', () => {
       const url = makeUrl();
       mockRedis.get.mockResolvedValue(JSON.stringify(url));
 
-      await request(app)
-        .get('/abc1234567')
-        .set('User-Agent', 'Googlebot/2.1')
-        .expect(302);
+      await request(app).get('/abc1234567').set('User-Agent', 'Googlebot/2.1').expect(302);
 
       expect(mockRedis.set).not.toHaveBeenCalled();
       expect(mockPrismaURL.update).not.toHaveBeenCalled();

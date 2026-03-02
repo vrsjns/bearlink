@@ -7,11 +7,11 @@ const cors = require('./middlewares/cors');
 const events = require('./events');
 
 module.exports = {
-    logger,
-    rabbitmq,
-    validation,
-    healthCheck,
-    rateLimit,
-    cors,
-    events,
+  logger,
+  rabbitmq,
+  validation,
+  healthCheck,
+  rateLimit,
+  cors,
+  events,
 };

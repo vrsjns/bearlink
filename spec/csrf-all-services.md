@@ -15,6 +15,7 @@ into `shared/` so every service can opt in with minimal wiring.
 ## Background
 
 The auth-hardening spec (now complete) introduced:
+
 - A `token` cookie (`httpOnly`, `SameSite=strict`) on all services via the shared
   `authenticateJWT` middleware
 - A CSRF token endpoint (`GET /csrf-token`) and validation middleware in
@@ -23,6 +24,7 @@ The auth-hardening spec (now complete) introduced:
   across all services because they share the same `JWT_SECRET`
 
 Current exposure:
+
 - `url-service` — `POST /urls`, `PUT /urls/:id`, `DELETE /urls/:id`, and other
   mutating endpoints accept cookie auth but do not validate `X-CSRF-Token`
 - `analytics-service` — same gap for any mutating endpoints it exposes
@@ -66,9 +68,9 @@ is defence-in-depth that covers older browsers and any future relaxation of the
 - [ ] `POST /urls` with cookie auth and no `X-CSRF-Token` returns 403.
 - [ ] `DELETE /urls/:id` with cookie auth and a valid `X-CSRF-Token` succeeds.
 - [ ] `POST /urls` with a Bearer token and no `X-CSRF-Token` succeeds (Bearer
-  requests are exempt).
+      requests are exempt).
 - [ ] The CSRF token fetched from auth-service's `GET /csrf-token` is accepted by
-  url-service and analytics-service (same secret, same derivation).
+      url-service and analytics-service (same secret, same derivation).
 - [ ] All existing auth-service tests pass after the refactor to shared imports.
 
 ## Out of Scope
@@ -81,7 +83,7 @@ is defence-in-depth that covers older browsers and any future relaxation of the
 ## Docs to Update
 
 - [ ] `docs/openapi.yaml` — add `X-CSRF-Token` header requirement to mutating
-  endpoints in url-service and analytics-service sections
+      endpoints in url-service and analytics-service sections
 
 ## Tasks
 

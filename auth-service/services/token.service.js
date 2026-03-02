@@ -5,11 +5,12 @@ const jwt = require('jsonwebtoken');
  * @param {Object} user - User object with id, email, name, role
  * @returns {string} JWT token
  */
-const generateToken = (user) => jwt.sign(
-  { id: user.id, email: user.email, name: user.name, role: user.role },
-  process.env.JWT_SECRET,
-  { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
-);
+const generateToken = (user) =>
+  jwt.sign(
+    { id: user.id, email: user.email, name: user.name, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
+  );
 
 /**
  * Remove password from user object

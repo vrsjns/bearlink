@@ -1,6 +1,12 @@
 const bcrypt = require('bcryptjs');
 const { createLogger } = require('shared/utils/logger');
-const { isValidEmail, isValidPassword, isValidName, validateRequiredFields, validationError } = require('shared/utils/validation');
+const {
+  isValidEmail,
+  isValidPassword,
+  isValidName,
+  validateRequiredFields,
+  validationError,
+} = require('shared/utils/validation');
 const { generateToken, sanitizeUser } = require('../services/token.service');
 
 const logger = createLogger('auth-service');
@@ -135,7 +141,10 @@ const createUsersController = ({ prisma }) => {
     const { currentPassword, newPassword } = req.body;
 
     // Validate required fields
-    const { isValid, missing } = validateRequiredFields(req.body, ['currentPassword', 'newPassword']);
+    const { isValid, missing } = validateRequiredFields(req.body, [
+      'currentPassword',
+      'newPassword',
+    ]);
     if (!isValid) {
       return validationError(res, 'Missing required fields', { missing });
     }
@@ -154,7 +163,10 @@ const createUsersController = ({ prisma }) => {
 
       // Validate new password strength
       if (!isValidPassword(newPassword)) {
-        return validationError(res, 'Password must be at least 8 characters and contain uppercase, lowercase, and a number');
+        return validationError(
+          res,
+          'Password must be at least 8 characters and contain uppercase, lowercase, and a number'
+        );
       }
 
       // Prevent reusing the same password

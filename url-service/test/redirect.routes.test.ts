@@ -151,10 +151,7 @@ describe('Redirect Routes', () => {
         mockPrismaURL.findFirst.mockResolvedValue(url);
         mockPrismaURL.update.mockResolvedValue({ ...url, clicks: 6 });
 
-        await request(app)
-          .get('/abc1234567')
-          .set('User-Agent', 'Mozilla/5.0')
-          .expect(302);
+        await request(app).get('/abc1234567').set('User-Agent', 'Mozilla/5.0').expect(302);
 
         const payload = mockEventPublisher.publishUrlClicked.mock.calls[0][0];
         expect(payload.referer).toBeNull();
@@ -174,10 +171,7 @@ describe('Redirect Routes', () => {
           const url = makeUrl();
           mockPrismaURL.findFirst.mockResolvedValue(url);
 
-          await request(app)
-            .get('/abc1234567')
-            .set('User-Agent', ua)
-            .expect(302);
+          await request(app).get('/abc1234567').set('User-Agent', ua).expect(302);
 
           expect(mockPrismaURL.update).not.toHaveBeenCalled();
           expect(mockEventPublisher.publishUrlClicked).not.toHaveBeenCalled();
@@ -200,10 +194,7 @@ describe('Redirect Routes', () => {
         const url = makeUrl();
         mockPrismaURL.findFirst.mockResolvedValue(url);
 
-        await request(app)
-          .get('/abc1234567')
-          .unset('User-Agent')
-          .expect(302);
+        await request(app).get('/abc1234567').unset('User-Agent').expect(302);
 
         expect(mockPrismaURL.update).not.toHaveBeenCalled();
       });
@@ -238,10 +229,7 @@ describe('Redirect Routes', () => {
         mockPrismaURL.findFirst.mockResolvedValue(url);
         mockPrismaURL.update.mockResolvedValue({ ...url, clicks: 6 });
 
-        await request(app)
-          .get('/abc1234567')
-          .set('User-Agent', 'Mozilla/5.0')
-          .expect(302);
+        await request(app).get('/abc1234567').set('User-Agent', 'Mozilla/5.0').expect(302);
       });
     });
 
@@ -258,12 +246,13 @@ describe('Redirect Routes', () => {
 
     describe('preview page', () => {
       it('should return HTML page for ?preview=1', async () => {
-        const url = makeUrl({ previewTitle: 'Example Site', previewDescription: 'A great example' });
+        const url = makeUrl({
+          previewTitle: 'Example Site',
+          previewDescription: 'A great example',
+        });
         mockPrismaURL.findFirst.mockResolvedValue(url);
 
-        const response = await request(app)
-          .get('/abc1234567?preview=1')
-          .expect(200);
+        const response = await request(app).get('/abc1234567?preview=1').expect(200);
 
         expect(response.headers['content-type']).toMatch(/html/);
         expect(response.text).toContain('https://example.com');
@@ -287,9 +276,7 @@ describe('Redirect Routes', () => {
         const url = makeUrl({ utmParams: { utm_source: 'newsletter' } });
         mockPrismaURL.findFirst.mockResolvedValue(url);
 
-        const response = await request(app)
-          .get('/abc1234567?preview=1')
-          .expect(200);
+        const response = await request(app).get('/abc1234567?preview=1').expect(200);
 
         expect(response.text).toContain('utm_source=newsletter');
       });
@@ -523,10 +510,7 @@ describe('Redirect Routes', () => {
 
     describe('validation', () => {
       it('should return 400 when password is missing', async () => {
-        const response = await request(app)
-          .post('/abc1234567/unlock')
-          .send({})
-          .expect(400);
+        const response = await request(app).post('/abc1234567/unlock').send({}).expect(400);
 
         expect(response.body.error).toBe('Password is required.');
       });
@@ -534,20 +518,14 @@ describe('Redirect Routes', () => {
       it('should return 404 for non-existent shortId', async () => {
         mockPrismaURL.findFirst.mockResolvedValue(null);
 
-        await request(app)
-          .post('/nonexistent/unlock')
-          .send({ password: PASSWORD })
-          .expect(404);
+        await request(app).post('/nonexistent/unlock').send({ password: PASSWORD }).expect(404);
       });
 
       it('should return 400 when link is not password protected', async () => {
         const url = makeUrl({ passwordHash: null });
         mockPrismaURL.findFirst.mockResolvedValue(url);
 
-        await request(app)
-          .post('/abc1234567/unlock')
-          .send({ password: PASSWORD })
-          .expect(400);
+        await request(app).post('/abc1234567/unlock').send({ password: PASSWORD }).expect(400);
       });
 
       it('should return 410 when trying to unlock an expired link', async () => {
