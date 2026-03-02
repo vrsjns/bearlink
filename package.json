@@ -17,12 +17,15 @@
     "test:coverage": "vitest run --coverage",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint . --ext .js"
+    "lint": "eslint . --ext .js",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^2.1.0",
     "eslint": "^8.57.1",
+    "husky": "^9.1.7",
     "lerna": "^8.1.8",
+    "lint-staged": "^15.5.2",
     "prettier": "^3.8.1",
     "vitest": "^2.1.0"
   },
@@ -37,5 +40,12 @@
     "uuid": "^9.0.1",
     "validator": "^13.11.0",
     "winston": "^3.14.1"
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{ts,tsx,css,json,yaml,yml,md}": "prettier --write"
   }
 }

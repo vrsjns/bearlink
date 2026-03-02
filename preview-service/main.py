@@ -98,7 +98,9 @@ def _is_valid_url(url: str) -> bool:
 @app.get("/preview", response_model=PreviewResponse)
 def get_preview(url: str = Query(..., description="The URL to fetch metadata for")):
     if not _is_valid_url(url):
-        raise HTTPException(status_code=400, detail="Invalid URL. Must be a valid HTTP or HTTPS URL.")
+        raise HTTPException(
+            status_code=400, detail="Invalid URL. Must be a valid HTTP or HTTPS URL."
+        )
 
     meta = fetch_preview(url)
     return PreviewResponse(
