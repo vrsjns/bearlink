@@ -1,6 +1,6 @@
 # Redis-backed Login Attempt Store
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** auth-service
 > **Priority:** medium
 

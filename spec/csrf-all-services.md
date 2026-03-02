@@ -1,6 +1,6 @@
 # CSRF Protection for All Services
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** url-service, analytics-service, shared
 > **Priority:** medium
 

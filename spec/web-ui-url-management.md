@@ -1,6 +1,6 @@
 # Web UI — Full URL Management
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** web-ui, url-service
 > **Priority:** high
 
