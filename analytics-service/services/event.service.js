@@ -2,6 +2,14 @@ const { createLogger } = require('shared/utils/logger');
 
 const logger = createLogger('analytics-service');
 
+const SCHEMAS = {
+  user_registered: ['id', 'email'],
+  url_created: ['shortId', 'userId'],
+  url_updated: ['shortId', 'userId'],
+  url_deleted: ['shortId', 'userId'],
+  url_clicked: ['shortId'],
+};
+
 /**
  * Create event handler with dependencies
  * @param {Object} deps - Dependencies
@@ -11,6 +19,21 @@ const logger = createLogger('analytics-service');
 const createEventHandler = ({ prisma }) => {
   return async (type, payload) => {
     try {
+      if (!(type in SCHEMAS)) {
+        logger.warn('Unknown event type, discarding', { eventType: type });
+        return;
+      }
+
+      const requiredFields = SCHEMAS[type];
+      const missingFields = requiredFields.filter((field) => !(field in payload));
+      if (missingFields.length > 0) {
+        logger.warn('Event payload missing required fields, discarding', {
+          eventType: type,
+          missingFields,
+        });
+        return;
+      }
+
       await prisma.event.create({
         data: { type, payload },
       });

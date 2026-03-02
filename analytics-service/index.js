@@ -1,4 +1,5 @@
 require('dotenv').config();
+const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 
 const { connectRabbitMQ } = require('shared/utils/rabbitmq');
@@ -7,6 +8,7 @@ const { healthHandler, createReadinessHandler } = require('shared/utils/healthCh
 const { consumeEvents } = require('shared/events');
 const { createApp } = require('./app');
 const { createEventHandler } = require('./services/event.service');
+const { runCleanup } = require('./services/cleanup.service');
 
 const logger = createLogger('analytics-service');
 const prisma = new PrismaClient();
@@ -38,6 +40,13 @@ connectRabbitMQ()
 
     const server = app.listen(process.env.PORT || 6000, () => {
       logger.info(`Analytics service running on port ${process.env.PORT || 6000}`);
+    });
+
+    const retentionDays = parseInt(process.env.EVENT_RETENTION_DAYS || '90');
+    cron.schedule('0 2 * * *', () => {
+      runCleanup(prisma, retentionDays).catch((error) => {
+        logger.error('Cleanup job failed', { error: error.message });
+      });
     });
 
     process.on('SIGTERM', gracefulShutdown(server));

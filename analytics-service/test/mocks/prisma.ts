@@ -3,6 +3,8 @@ import { vi } from 'vitest';
 export const mockPrismaEvent = {
   create: vi.fn(),
   findMany: vi.fn(),
+  count: vi.fn(),
+  deleteMany: vi.fn(),
 };
 
 export const createMockPrismaClient = () => ({
