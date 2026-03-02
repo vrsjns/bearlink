@@ -935,7 +935,6 @@ components:
             $ref: '#/components/schemas/Error'
 
   schemas:
-
     # ── Auth ──────────────────────────────────────────────────────────────────
 
     RegisterRequest:

@@ -38,20 +38,20 @@ spec:
               mountPath: /var/lib/rabbitmq
           resources:
             requests:
-              memory: "128Mi"
-              cpu: "100m"
+              memory: '128Mi'
+              cpu: '100m'
             limits:
-              memory: "512Mi"
-              cpu: "300m"
+              memory: '512Mi'
+              cpu: '300m'
           readinessProbe:
             exec:
-              command: ["rabbitmq-diagnostics", "check_port_connectivity"]
+              command: ['rabbitmq-diagnostics', 'check_port_connectivity']
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 10
           livenessProbe:
             exec:
-              command: ["rabbitmq-diagnostics", "status"]
+              command: ['rabbitmq-diagnostics', 'status']
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 15
@@ -59,7 +59,7 @@ spec:
     - metadata:
         name: rabbitmq-data
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes: ['ReadWriteOnce']
         storageClassName: local-path
         resources:
           requests:

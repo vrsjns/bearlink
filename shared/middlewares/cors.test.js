@@ -52,7 +52,10 @@ describe('CORS Middleware', () => {
     corsMiddleware(req, res, next);
 
     expect(next).toHaveBeenCalled();
-    expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', 'http://localhost:3000');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Access-Control-Allow-Origin',
+      'http://localhost:3000'
+    );
   });
 
   it('should reject requests from disallowed origins', () => {
@@ -80,6 +83,9 @@ describe('CORS Middleware', () => {
     corsMiddleware(req, res, next);
 
     // CORS middleware should respond to OPTIONS
-    expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', 'http://localhost:3000');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Access-Control-Allow-Origin',
+      'http://localhost:3000'
+    );
   });
 });

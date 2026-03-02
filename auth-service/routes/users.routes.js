@@ -29,7 +29,13 @@ const createUsersRoutes = ({ prisma }) => {
   router.delete('/users/:userId', authenticateJWT, isAdmin, apiLimiter, controller.deleteUser);
 
   // Change password (self or admin)
-  router.post('/users/:userId/password', authenticateJWT, isSelfOrAdmin, authLimiter, controller.changePassword);
+  router.post(
+    '/users/:userId/password',
+    authenticateJWT,
+    isSelfOrAdmin,
+    authLimiter,
+    controller.changePassword
+  );
 
   return router;
 };

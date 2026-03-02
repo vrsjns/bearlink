@@ -11,10 +11,10 @@ vi.mock('@/lib/axios', () => ({
 describe('Analytics API Service', () => {
   it('should create analytics API client', async () => {
     // Import after mock is set up
-    const module = await import('./analytics');
+    const analyticsModule = await import('./analytics');
 
     // The module exports an axios instance (analyticsApiClient)
     // We verify the module loads without error
-    expect(module).toBeDefined();
+    expect(analyticsModule).toBeDefined();
   });
 });

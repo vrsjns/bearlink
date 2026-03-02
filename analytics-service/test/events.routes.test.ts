@@ -35,9 +35,7 @@ describe('Events Routes', () => {
 
         mockPrismaEvent.findMany.mockResolvedValue(mockEvents);
 
-        const response = await request(app)
-          .get('/events')
-          .expect(200);
+        const response = await request(app).get('/events').expect(200);
 
         expect(response.body).toHaveLength(2);
         expect(response.body[0].type).toBe('user_registered');
@@ -48,9 +46,7 @@ describe('Events Routes', () => {
       it('should return empty array when no events exist', async () => {
         mockPrismaEvent.findMany.mockResolvedValue([]);
 
-        const response = await request(app)
-          .get('/events')
-          .expect(200);
+        const response = await request(app).get('/events').expect(200);
 
         expect(response.body).toEqual([]);
         expect(mockPrismaEvent.findMany).toHaveBeenCalled();
@@ -66,9 +62,7 @@ describe('Events Routes', () => {
 
         mockPrismaEvent.findMany.mockResolvedValue([mockEvent]);
 
-        const response = await request(app)
-          .get('/events')
-          .expect(200);
+        const response = await request(app).get('/events').expect(200);
 
         expect(response.body[0]).toHaveProperty('id');
         expect(response.body[0]).toHaveProperty('type');
@@ -81,9 +75,7 @@ describe('Events Routes', () => {
       it('should return 500 on database error', async () => {
         mockPrismaEvent.findMany.mockRejectedValue(new Error('Database error'));
 
-        const response = await request(app)
-          .get('/events')
-          .expect(500);
+        const response = await request(app).get('/events').expect(500);
 
         expect(response.body).toEqual({ error: 'Failed to fetch events' });
       });
@@ -91,9 +83,7 @@ describe('Events Routes', () => {
       it('should return 500 on connection timeout', async () => {
         mockPrismaEvent.findMany.mockRejectedValue(new Error('Connection timeout'));
 
-        const response = await request(app)
-          .get('/events')
-          .expect(500);
+        const response = await request(app).get('/events').expect(500);
 
         expect(response.body.error).toBe('Failed to fetch events');
       });

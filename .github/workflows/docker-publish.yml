@@ -3,7 +3,7 @@ name: Build and Push Docker Images
 on:
   push:
     branches: [master]
-    tags: ["v*.*.*"]
+    tags: ['v*.*.*']
   workflow_dispatch:
 
 env:
@@ -50,15 +50,15 @@ jobs:
       - name: Build matrix
         id: set-matrix
         env:
-          FILTER_AUTH:         ${{ steps.filter.outputs.auth-service }}
-          FILTER_URL:          ${{ steps.filter.outputs.url-service }}
-          FILTER_ANALYTICS:    ${{ steps.filter.outputs.analytics-service }}
+          FILTER_AUTH: ${{ steps.filter.outputs.auth-service }}
+          FILTER_URL: ${{ steps.filter.outputs.url-service }}
+          FILTER_ANALYTICS: ${{ steps.filter.outputs.analytics-service }}
           FILTER_NOTIFICATION: ${{ steps.filter.outputs.notification-service }}
-          FILTER_WEBUI:        ${{ steps.filter.outputs.web-ui }}
-          FILTER_PREVIEW:      ${{ steps.filter.outputs.preview-service }}
-          FILTER_SHARED:       ${{ steps.filter.outputs.shared }}
-          GITHUB_REF:          ${{ github.ref }}
-          GITHUB_EVENT:        ${{ github.event_name }}
+          FILTER_WEBUI: ${{ steps.filter.outputs.web-ui }}
+          FILTER_PREVIEW: ${{ steps.filter.outputs.preview-service }}
+          FILTER_SHARED: ${{ steps.filter.outputs.shared }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_EVENT: ${{ github.event_name }}
         run: |
           declare -a ALL_SERVICES=(
             "auth-service|.|auth-service/Dockerfile"

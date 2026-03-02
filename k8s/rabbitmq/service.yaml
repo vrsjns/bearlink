@@ -6,7 +6,7 @@ metadata:
 spec:
   selector:
     app: rabbitmq
-  clusterIP: None  # Headless — required for StatefulSet DNS
+  clusterIP: None # Headless — required for StatefulSet DNS
   ports:
     - name: amqp
       port: 5672

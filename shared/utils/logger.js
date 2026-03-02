@@ -60,10 +60,7 @@ const createLogger = (serviceName) => {
     level: process.env.LOG_LEVEL || 'info',
     defaultMeta: { service: serviceName },
     format: isTextFormat ? textFormat : jsonFormat,
-    transports: [
-      new transports.Console(),
-      new transports.File({ filename: 'app.log' })
-    ]
+    transports: [new transports.Console(), new transports.File({ filename: 'app.log' })],
   });
 
   return logger;
@@ -76,10 +73,7 @@ const createLogger = (serviceName) => {
 const logger = winstonCreateLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: isTextFormat ? textFormat : jsonFormat,
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'app.log' })
-  ]
+  transports: [new transports.Console(), new transports.File({ filename: 'app.log' })],
 });
 
 module.exports = logger;

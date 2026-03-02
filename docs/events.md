@@ -8,12 +8,12 @@ BearLink uses RabbitMQ for asynchronous messaging between services. Events enabl
 
 ## Queues
 
-| Queue | Purpose | Publishers | Consumers |
-|-------|---------|------------|-----------|
-| `events` | Domain events for analytics tracking | auth-service, url-service | analytics-service |
-| `email_notifications` | Email delivery requests | auth-service | notification-service |
-| `preview_jobs` | Trigger async metadata scraping | url-service | preview-service |
-| `preview_results` | Return scraped metadata | preview-service | url-service |
+| Queue                 | Purpose                              | Publishers                | Consumers            |
+| --------------------- | ------------------------------------ | ------------------------- | -------------------- |
+| `events`              | Domain events for analytics tracking | auth-service, url-service | analytics-service    |
+| `email_notifications` | Email delivery requests              | auth-service              | notification-service |
+| `preview_jobs`        | Trigger async metadata scraping      | url-service               | preview-service      |
+| `preview_results`     | Return scraped metadata              | preview-service           | url-service          |
 
 ## Event Types
 
@@ -25,6 +25,7 @@ Published when a new user completes registration.
 **Consumer:** analytics-service
 
 **Payload:**
+
 ```json
 {
   "type": "user_registered",
@@ -50,6 +51,7 @@ Published when a user creates a new shortened URL.
 Note: `passwordHash` is stripped before publishing.
 
 **Payload:**
+
 ```json
 {
   "type": "url_created",
@@ -82,6 +84,7 @@ Published when a user updates an existing shortened URL.
 Note: `passwordHash` is stripped before publishing. The payload contains the full updated URL record.
 
 **Payload:**
+
 ```json
 {
   "type": "url_updated",
@@ -112,6 +115,7 @@ Published when a user deletes a shortened URL.
 **Consumer:** analytics-service
 
 **Payload:**
+
 ```json
 {
   "type": "url_deleted",
@@ -135,6 +139,7 @@ Published when a shortened URL is accessed by a human visitor. Bot requests (det
 **Consumer:** analytics-service
 
 **Payload:**
+
 ```json
 {
   "type": "url_clicked",
@@ -198,6 +203,7 @@ Email notifications are sent directly to the `email_notifications` queue without
 **Consumer:** notification-service
 
 **Payload:**
+
 ```json
 {
   "to": "user@example.com",
@@ -254,11 +260,16 @@ const { consumeEvents, consumeEmailNotifications } = require('shared/events');
 // Consume domain events
 await consumeEvents(channel, async (type, payload) => {
   switch (type) {
-    case 'url_created': /* ... */ break;
-    case 'url_updated': /* ... */ break;
-    case 'url_deleted': /* ... */ break;
-    case 'url_clicked': /* ... */ break;
-    case 'user_registered': /* ... */ break;
+    case 'url_created':
+      /* ... */ break;
+    case 'url_updated':
+      /* ... */ break;
+    case 'url_deleted':
+      /* ... */ break;
+    case 'url_clicked':
+      /* ... */ break;
+    case 'user_registered':
+      /* ... */ break;
   }
 });
 

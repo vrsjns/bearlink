@@ -36,19 +36,19 @@ spec:
               mountPath: /docker-entrypoint-initdb.d
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "250m"
+              memory: '256Mi'
+              cpu: '250m'
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: '512Mi'
+              cpu: '500m'
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "postgres"]
+              command: ['pg_isready', '-U', 'postgres']
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
             exec:
-              command: ["pg_isready", "-U", "postgres"]
+              command: ['pg_isready', '-U', 'postgres']
             initialDelaySeconds: 30
             periodSeconds: 10
       volumes:
@@ -59,7 +59,7 @@ spec:
     - metadata:
         name: postgres-data
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes: ['ReadWriteOnce']
         storageClassName: local-path
         resources:
           requests:

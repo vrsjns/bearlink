@@ -145,9 +145,7 @@ describe('Notification Service', () => {
           text: 'Email body',
         });
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
-          expect.objectContaining({ subject })
-        );
+        expect(mockTransporter.sendMail).toHaveBeenCalledWith(expect.objectContaining({ subject }));
       }
     });
 

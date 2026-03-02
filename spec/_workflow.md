@@ -46,13 +46,13 @@ pressure when new specs are added for the same service area.
 
 ## Status Values
 
-| Status | Meaning |
-|--------|---------|
-| `draft` | Being written, not ready for implementation |
-| `review` | Ready to discuss or get feedback |
-| `approved` | Approved for implementation |
-| `in-progress` | Actively being implemented |
-| `done` | Implemented and all acceptance criteria verified |
+| Status        | Meaning                                          |
+| ------------- | ------------------------------------------------ |
+| `draft`       | Being written, not ready for implementation      |
+| `review`      | Ready to discuss or get feedback                 |
+| `approved`    | Approved for implementation                      |
+| `in-progress` | Actively being implemented                       |
+| `done`        | Implemented and all acceptance criteria verified |
 
 ## Spec Format Rules
 
@@ -65,22 +65,26 @@ pressure when new specs are added for the same service area.
 ## Working with Claude
 
 **To create a spec:**
+
 > "Help me write a spec for [feature] in BearLink"
 
 **To refine a spec:**
+
 > "Review spec/my-feature.md and point out gaps or ambiguities"
 
 **To generate tasks:**
+
 > "Generate implementation tasks for spec/my-feature.md"
 
 **To implement:**
+
 > "Implement task 3 from spec/my-feature.md"
 
 ## Relationship to Other Docs
 
-| File | Role |
-|------|------|
-| `spec/*.md` | Source of truth for planned and active work |
-| `docs/openapi.yaml` | Describes what the API currently does (REST) |
+| File                 | Role                                           |
+| -------------------- | ---------------------------------------------- |
+| `spec/*.md`          | Source of truth for planned and active work    |
+| `docs/openapi.yaml`  | Describes what the API currently does (REST)   |
 | `docs/asyncapi.yaml` | Describes what the API currently does (events) |
-| `CLAUDE.md` | Dev environment and architectural conventions |
+| `CLAUDE.md`          | Dev environment and architectural conventions  |

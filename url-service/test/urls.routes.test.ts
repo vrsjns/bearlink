@@ -101,9 +101,7 @@ describe('URLs Routes', () => {
           .set('Authorization', `Bearer ${token}`)
           .expect(200);
 
-        expect(mockPrismaURL.findMany).toHaveBeenCalledWith(
-          expect.objectContaining({ take: 100 })
-        );
+        expect(mockPrismaURL.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
       });
     });
 
@@ -246,7 +244,9 @@ describe('URLs Routes', () => {
       it('should default redirectType to 302', async () => {
         const token = generateTestToken(regularUser);
         mockPrismaURL.create.mockImplementation((args: any) =>
-          Promise.resolve(makeUrl({ shortId: args.data.shortId, redirectType: args.data.redirectType }))
+          Promise.resolve(
+            makeUrl({ shortId: args.data.shortId, redirectType: args.data.redirectType })
+          )
         );
 
         await request(app)
@@ -261,7 +261,9 @@ describe('URLs Routes', () => {
       it('should accept redirectType 301', async () => {
         const token = generateTestToken(regularUser);
         mockPrismaURL.create.mockImplementation((args: any) =>
-          Promise.resolve(makeUrl({ shortId: args.data.shortId, redirectType: args.data.redirectType }))
+          Promise.resolve(
+            makeUrl({ shortId: args.data.shortId, redirectType: args.data.redirectType })
+          )
         );
 
         await request(app)
@@ -320,7 +322,9 @@ describe('URLs Routes', () => {
 
       it('should return 409 when customAlias is already taken', async () => {
         const token = generateTestToken(regularUser);
-        mockPrismaURL.create.mockRejectedValue(Object.assign(new Error('Unique'), { code: 'P2002' }));
+        mockPrismaURL.create.mockRejectedValue(
+          Object.assign(new Error('Unique'), { code: 'P2002' })
+        );
 
         const response = await request(app)
           .post('/urls')
@@ -481,7 +485,9 @@ describe('URLs Routes', () => {
 
         mockPrismaURL.create
           .mockRejectedValueOnce(collisionError)
-          .mockImplementation((args: any) => Promise.resolve(makeUrl({ shortId: args.data.shortId })));
+          .mockImplementation((args: any) =>
+            Promise.resolve(makeUrl({ shortId: args.data.shortId }))
+          );
 
         const response = await request(app)
           .post('/urls')
@@ -697,7 +703,9 @@ describe('URLs Routes', () => {
 
       it('should return 404 when URL not found', async () => {
         const token = generateTestToken(regularUser);
-        mockPrismaURL.update.mockRejectedValue(Object.assign(new Error('Not found'), { code: 'P2025' }));
+        mockPrismaURL.update.mockRejectedValue(
+          Object.assign(new Error('Not found'), { code: 'P2025' })
+        );
 
         const response = await request(app)
           .put('/urls/999')
@@ -710,7 +718,9 @@ describe('URLs Routes', () => {
 
       it('should return 409 when customAlias is already taken', async () => {
         const token = generateTestToken(regularUser);
-        mockPrismaURL.update.mockRejectedValue(Object.assign(new Error('Unique'), { code: 'P2002' }));
+        mockPrismaURL.update.mockRejectedValue(
+          Object.assign(new Error('Unique'), { code: 'P2002' })
+        );
 
         const response = await request(app)
           .put('/urls/1')
@@ -772,22 +782,18 @@ describe('URLs Routes', () => {
       const token = generateTestToken(regularUser);
       mockPrismaURL.delete.mockResolvedValue(makeUrl());
 
-      await request(app)
-        .delete('/urls/1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(204);
+      await request(app).delete('/urls/1').set('Authorization', `Bearer ${token}`).expect(204);
 
-      expect(mockPrismaURL.delete).toHaveBeenCalledWith({ where: { id: 1, userId: regularUser.id } });
+      expect(mockPrismaURL.delete).toHaveBeenCalledWith({
+        where: { id: 1, userId: regularUser.id },
+      });
     });
 
     it('should publish url_deleted event (without passwordHash)', async () => {
       const token = generateTestToken(regularUser);
       mockPrismaURL.delete.mockResolvedValue(makeUrl({ passwordHash: 'hash' }));
 
-      await request(app)
-        .delete('/urls/1')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(204);
+      await request(app).delete('/urls/1').set('Authorization', `Bearer ${token}`).expect(204);
 
       expect(mockEventPublisher.publishUrlDeleted).toHaveBeenCalledTimes(1);
       const published = mockEventPublisher.publishUrlDeleted.mock.calls[0][0];
@@ -796,7 +802,9 @@ describe('URLs Routes', () => {
 
     it('should return 404 when URL not found', async () => {
       const token = generateTestToken(regularUser);
-      mockPrismaURL.delete.mockRejectedValue(Object.assign(new Error('Not found'), { code: 'P2025' }));
+      mockPrismaURL.delete.mockRejectedValue(
+        Object.assign(new Error('Not found'), { code: 'P2025' })
+      );
 
       const response = await request(app)
         .delete('/urls/999')
@@ -836,16 +844,15 @@ describe('URLs Routes', () => {
         const token = generateTestToken(regularUser);
         mockPrismaURL.create
           .mockResolvedValueOnce(makeUrl({ shortId: 'aaa1111111' }))
-          .mockResolvedValueOnce(makeUrl({ shortId: 'bbb2222222', originalUrl: 'https://other.com' }));
+          .mockResolvedValueOnce(
+            makeUrl({ shortId: 'bbb2222222', originalUrl: 'https://other.com' })
+          );
 
         const response = await request(app)
           .post('/urls/bulk')
           .set('Authorization', `Bearer ${token}`)
           .send({
-            urls: [
-              { originalUrl: 'https://example.com' },
-              { originalUrl: 'https://other.com' },
-            ],
+            urls: [{ originalUrl: 'https://example.com' }, { originalUrl: 'https://other.com' }],
           })
           .expect(200);
 
@@ -864,10 +871,7 @@ describe('URLs Routes', () => {
           .post('/urls/bulk')
           .set('Authorization', `Bearer ${token}`)
           .send({
-            urls: [
-              { originalUrl: 'https://example.com' },
-              { originalUrl: 'https://other.com' },
-            ],
+            urls: [{ originalUrl: 'https://example.com' }, { originalUrl: 'https://other.com' }],
           })
           .expect(200);
 
@@ -883,10 +887,7 @@ describe('URLs Routes', () => {
           .post('/urls/bulk')
           .set('Authorization', `Bearer ${token}`)
           .send({
-            urls: [
-              { originalUrl: 'https://example.com' },
-              { originalUrl: 'not-a-valid-url' },
-            ],
+            urls: [{ originalUrl: 'https://example.com' }, { originalUrl: 'not-a-valid-url' }],
           })
           .expect(200);
 
@@ -905,10 +906,7 @@ describe('URLs Routes', () => {
           .post('/urls/bulk')
           .set('Authorization', `Bearer ${token}`)
           .send({
-            urls: [
-              { originalUrl: 'https://example.com' },
-              { originalUrl: 'https://other.com' },
-            ],
+            urls: [{ originalUrl: 'https://example.com' }, { originalUrl: 'https://other.com' }],
           })
           .expect(200);
 

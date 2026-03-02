@@ -61,16 +61,16 @@ auth-service does not currently declare a Redis dependency.
 ## Acceptance Criteria
 
 - [ ] With `REDIS_URL` set, failed attempts are visible in Redis (`redis-cli keys
-  "login_*"`) and count correctly across two app instances sharing the same Redis.
+"login_*"`) and count correctly across two app instances sharing the same Redis.
 - [ ] After 5 failed attempts, `GET login_locked:{email}` exists in Redis with a TTL
-  close to 900 seconds.
+      close to 900 seconds.
 - [ ] After a successful login, both Redis keys for that email are deleted.
 - [ ] With `REDIS_URL` unset, the service starts normally and falls back to the
-  in-memory store (existing behaviour unchanged).
+      in-memory store (existing behaviour unchanged).
 - [ ] When Redis is unreachable mid-request, the auth-service returns 200/400
-  normally (no 500) and a warning is emitted in the logs.
+      normally (no 500) and a warning is emitted in the logs.
 - [ ] `docker-compose up` starts the auth-service connected to Redis with no manual
-  configuration.
+      configuration.
 
 ## Out of Scope
 
@@ -83,7 +83,7 @@ auth-service does not currently declare a Redis dependency.
 ## Docs to Update
 
 - [ ] `CLAUDE.md` — update `REDIS_URL` description from "url-service only" to
-  include auth-service; document the graceful-degradation behaviour
+      include auth-service; document the graceful-degradation behaviour
 
 ## Tasks
 

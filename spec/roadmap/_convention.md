@@ -16,10 +16,10 @@ spec/
 
 ## Lifecycle
 
-| Stage | Where it lives | Trigger |
-|---|---|---|
-| Active | `spec/roadmap/` | Roadmap created; some parts still pending |
-| Archived | `spec/roadmap/done/` | All derived specs moved to `spec/done/` |
+| Stage    | Where it lives       | Trigger                                   |
+| -------- | -------------------- | ----------------------------------------- |
+| Active   | `spec/roadmap/`      | Roadmap created; some parts still pending |
+| Archived | `spec/roadmap/done/` | All derived specs moved to `spec/done/`   |
 
 ## How a roadmap relates to specs
 

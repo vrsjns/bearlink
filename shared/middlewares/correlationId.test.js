@@ -31,7 +31,9 @@ describe('CorrelationId Middleware', () => {
       correlationIdMiddleware(req, res, next);
 
       expect(req.correlationId).toBeDefined();
-      expect(req.correlationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+      expect(req.correlationId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
       expect(res.setHeader).toHaveBeenCalledWith('x-correlation-id', req.correlationId);
       expect(next).toHaveBeenCalled();
     });
@@ -75,7 +77,9 @@ describe('CorrelationId Middleware', () => {
       middleware(req, res, next);
 
       expect(req.correlationId).toBeDefined();
-      expect(req.correlationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+      expect(req.correlationId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
       expect(res.setHeader).toHaveBeenCalledWith('x-correlation-id', req.correlationId);
       expect(next).toHaveBeenCalled();
     });

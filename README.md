@@ -29,7 +29,7 @@ A URL shortening platform built as a Node.js/TypeScript microservices monorepo. 
 ```
 
 | Service              | Port | Database          | Role                                      |
-|----------------------|------|-------------------|-------------------------------------------|
+| -------------------- | ---- | ----------------- | ----------------------------------------- |
 | auth-service         | 4000 | auth_service      | Registration, login, JWT, user management |
 | url-service          | 5000 | url_service       | URL shortening, redirection, click counts |
 | analytics-service    | 6000 | analytics_service | Event log storage and retrieval           |
@@ -49,12 +49,12 @@ docker compose up --build
 
 Once running:
 
-| URL                        | What                          |
-|----------------------------|-------------------------------|
-| http://localhost:3000      | Web UI                        |
-| http://localhost:15672     | RabbitMQ management (guest/guest) |
-| http://localhost:8025      | MailHog — captured emails     |
-| http://localhost:3001      | Grafana dashboards (admin/admin) |
+| URL                    | What                              |
+| ---------------------- | --------------------------------- |
+| http://localhost:3000  | Web UI                            |
+| http://localhost:15672 | RabbitMQ management (guest/guest) |
+| http://localhost:8025  | MailHog — captured emails         |
+| http://localhost:3001  | Grafana dashboards (admin/admin)  |
 
 To stop:
 
@@ -81,6 +81,7 @@ Handles user accounts and authentication.
 Creates and resolves short links.
 
 **URL management (authenticated):**
+
 - `POST /urls` — shorten a URL; supports custom alias, expiry, password, tags, UTM params, signed URLs
 - `GET /urls` — list your links (paginated; filter by tag, search, expired)
 - `POST /urls/bulk` — create up to 50 links in one request (partial-success)
@@ -89,6 +90,7 @@ Creates and resolves short links.
 - `POST /urls/:id/sign` — generate a time-limited HMAC-signed URL
 
 **Public redirect:**
+
 - `GET /:shortId` — redirect to original URL (301/302); supports `?preview=1` for bounce page
 - `GET /:shortId/qr` — return a PNG QR code for the short link
 - `POST /:shortId/unlock` — submit password for a password-protected link
@@ -124,18 +126,19 @@ Next.js 14 frontend. Pages: login, register, dashboard (URL management), profile
 
 Services communicate asynchronously via RabbitMQ:
 
-| Queue                 | Publisher(s)              | Consumer(s)          | Purpose                        |
-|-----------------------|---------------------------|----------------------|--------------------------------|
-| `events`              | auth-service, url-service | analytics-service    | Domain events for audit log    |
-| `email_notifications` | auth-service              | notification-service | Email delivery payloads        |
-| `preview_jobs`        | url-service               | preview-service      | Async metadata scrape trigger  |
-| `preview_results`     | preview-service           | url-service          | Scraped metadata result        |
+| Queue                 | Publisher(s)              | Consumer(s)          | Purpose                       |
+| --------------------- | ------------------------- | -------------------- | ----------------------------- |
+| `events`              | auth-service, url-service | analytics-service    | Domain events for audit log   |
+| `email_notifications` | auth-service              | notification-service | Email delivery payloads       |
+| `preview_jobs`        | url-service               | preview-service      | Async metadata scrape trigger |
+| `preview_results`     | preview-service           | url-service          | Scraped metadata result       |
 
 RabbitMQ connections retry up to 30 times (2 s intervals) before giving up. See `docs/asyncapi.yaml` for full event schemas.
 
 ## Tech Stack
 
 **Backend services**
+
 - Node.js + Express
 - Prisma ORM (PostgreSQL)
 - RabbitMQ via `amqplib`
@@ -144,17 +147,20 @@ RabbitMQ connections retry up to 30 times (2 s intervals) before giving up. See 
 - Vitest + Supertest for testing
 
 **preview-service**
+
 - Python 3.11 + FastAPI
 - BeautifulSoup4 for HTML scraping
 - aio-pika for async RabbitMQ integration
 - pytest for testing
 
 **Frontend**
+
 - Next.js 14 (App Router) + React 18
 - TypeScript + Tailwind CSS
 - Axios with JWT interceptor
 
 **Infrastructure**
+
 - PostgreSQL (single instance, 3 databases)
 - RabbitMQ 3 with management UI
 - Redis 7 (URL caching, click deduplication)
@@ -162,6 +168,7 @@ RabbitMQ connections retry up to 30 times (2 s intervals) before giving up. See 
 - Loki + Promtail + Grafana for log aggregation and dashboards
 
 **Deployment**
+
 - Kubernetes manifests in `k8s/` — 27 YAML files for k3s
 - Kustomize overlay for image registry configuration
 - See [bearlink-infra](https://github.com/vrsjns/bearlink-infra) for Terraform + Ansible cluster provisioning
@@ -202,25 +209,25 @@ npm run test           # run tests
 
 Each service reads its own set of variables. The Docker Compose file injects all of them automatically; for local development, create a `.env` file in each service directory.
 
-| Variable                          | Services                   | Example value                                           |
-|-----------------------------------|----------------------------|---------------------------------------------------------|
-| `DATABASE_URL`                    | auth, url, analytics       | `postgresql://postgres:password@localhost:5432/auth_service` |
-| `JWT_SECRET`                      | auth, url, analytics       | `change_me_in_production`                               |
-| `RABBITMQ_URL`                    | all backend services       | `amqp://localhost`                                      |
-| `SMTP_HOST`                       | notification-service       | `localhost`                                             |
-| `SMTP_PORT`                       | notification-service       | `1025`                                                  |
-| `EMAIL_USER`                      | notification-service       | `notification@bear.link`                                |
-| `EMAIL_PASS`                      | notification-service       | `secret`                                                |
-| `REDIS_URL`                       | url-service                | `redis://localhost:6379`                                |
-| `SAFE_BROWSING_API_KEY`           | url-service (optional)     | Google Safe Browsing API v4 key                         |
-| `DOMAIN_BLOCKLIST`                | url-service (optional)     | `evil.com,bad.org` (comma-separated)                    |
-| `DOMAIN_ALLOWLIST`                | url-service (optional)     | `example.com,trusted.org` (comma-separated)             |
-| `URL_SIGNING_SECRET`              | url-service (optional)     | `openssl rand -hex 32`                                  |
-| `NEXT_PUBLIC_AUTH_SERVICE_URL`    | web-ui                     | `http://localhost:4000`                                 |
-| `NEXT_PUBLIC_URL_SERVICE_URL`     | web-ui                     | `http://localhost:5000`                                 |
-| `NEXT_PUBLIC_ANALYTICS_SERVICE_URL` | web-ui                   | `http://localhost:6000`                                 |
-| `LOG_FORMAT`                      | all backend services       | `text` (dev) / `json` (prod)                            |
-| `LOG_LEVEL`                       | all backend services       | `info`                                                  |
+| Variable                            | Services               | Example value                                                |
+| ----------------------------------- | ---------------------- | ------------------------------------------------------------ |
+| `DATABASE_URL`                      | auth, url, analytics   | `postgresql://postgres:password@localhost:5432/auth_service` |
+| `JWT_SECRET`                        | auth, url, analytics   | `change_me_in_production`                                    |
+| `RABBITMQ_URL`                      | all backend services   | `amqp://localhost`                                           |
+| `SMTP_HOST`                         | notification-service   | `localhost`                                                  |
+| `SMTP_PORT`                         | notification-service   | `1025`                                                       |
+| `EMAIL_USER`                        | notification-service   | `notification@bear.link`                                     |
+| `EMAIL_PASS`                        | notification-service   | `secret`                                                     |
+| `REDIS_URL`                         | url-service            | `redis://localhost:6379`                                     |
+| `SAFE_BROWSING_API_KEY`             | url-service (optional) | Google Safe Browsing API v4 key                              |
+| `DOMAIN_BLOCKLIST`                  | url-service (optional) | `evil.com,bad.org` (comma-separated)                         |
+| `DOMAIN_ALLOWLIST`                  | url-service (optional) | `example.com,trusted.org` (comma-separated)                  |
+| `URL_SIGNING_SECRET`                | url-service (optional) | `openssl rand -hex 32`                                       |
+| `NEXT_PUBLIC_AUTH_SERVICE_URL`      | web-ui                 | `http://localhost:4000`                                      |
+| `NEXT_PUBLIC_URL_SERVICE_URL`       | web-ui                 | `http://localhost:5000`                                      |
+| `NEXT_PUBLIC_ANALYTICS_SERVICE_URL` | web-ui                 | `http://localhost:6000`                                      |
+| `LOG_FORMAT`                        | all backend services   | `text` (dev) / `json` (prod)                                 |
+| `LOG_LEVEL`                         | all backend services   | `info`                                                       |
 
 ## Testing
 

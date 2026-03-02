@@ -52,20 +52,20 @@ user emails and URL data to any caller. There are no indexes on the Event table.
 
 - [ ] `GET /events` without a token returns 401.
 - [ ] `GET /events` with a regular user token returns only events where the payload
-  `userId` matches the authenticated user.
+      `userId` matches the authenticated user.
 - [ ] `GET /events` with an admin token returns all events.
 - [ ] `GET /events?page=2&limit=10` returns the correct page and includes
-  `{ pagination: { page, limit, total } }` in the response.
+      `{ pagination: { page, limit, total } }` in the response.
 - [ ] `GET /events?type=url_clicked` returns only events of that type.
 - [ ] `GET /events?from=2026-01-01&to=2026-02-01` returns only events in that range.
 - [ ] `GET /analytics/urls/:shortId/clicks` returns `{ total, today }`.
 - [ ] `GET /analytics/summary` with a non-admin token returns 403.
 - [ ] `GET /analytics/summary` with an admin token returns `{ totalUsers, totalUrls, totalClicks }`.
 - [ ] `GET /analytics/top-urls?period=7d&limit=5` returns at most 5 results ordered by
-  click count descending.
+      click count descending.
 - [ ] Publishing an event with an unknown type logs a warning and does not persist it.
 - [ ] Publishing a `url_clicked` event missing the `shortId` field logs a warning and
-  does not persist it.
+      does not persist it.
 - [ ] Events older than `EVENT_RETENTION_DAYS` are removed by the cleanup job.
 
 ## Out of Scope
