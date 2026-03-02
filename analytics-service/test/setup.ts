@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_analytics';
 process.env.RABBITMQ_URL = 'amqp://localhost';
 process.env.PORT = '6001';
+process.env.JWT_SECRET = 'test-jwt-secret';
 
 // Mock Prisma
 vi.mock('@prisma/client', () => ({
@@ -11,6 +12,8 @@ vi.mock('@prisma/client', () => ({
     event: {
       create: vi.fn(),
       findMany: vi.fn(),
+      count: vi.fn(),
+      deleteMany: vi.fn(),
     },
     $disconnect: vi.fn(),
     $queryRaw: vi.fn(),
@@ -29,8 +32,13 @@ vi.mock('shared/utils/rabbitmq', () => ({
   getChannel: vi.fn(),
 }));
 
-// Mock logger
+// Mock logger — include top-level methods (used by shared/middlewares/auth)
+// and createLogger (used by service/controller files)
 vi.mock('shared/utils/logger', () => ({
+  info: vi.fn(),
+  error: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
   createLogger: vi.fn().mockReturnValue({
     info: vi.fn(),
     error: vi.fn(),

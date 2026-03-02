@@ -69,7 +69,7 @@ kubectl get pods -n bearlink
 | -------------------- | ---- | ----------------- | ----------------------------------------------------- |
 | auth-service         | 4000 | auth_service      | User registration, login, JWT authentication          |
 | url-service          | 5000 | url_service       | URL shortening, redirection, click tracking           |
-| analytics-service    | 6000 | analytics_service | Event storage and retrieval                           |
+| analytics-service    | 6000 | analytics_service | Authenticated event storage, aggregation, and query   |
 | notification-service | 7000 | -                 | Email delivery via SMTP                               |
 | preview-service      | 8000 | -                 | Link metadata scraping (Python/FastAPI/BeautifulSoup) |
 | web-ui               | 3000 | -                 | Next.js frontend                                      |
@@ -173,3 +173,4 @@ Key variables (set via docker-compose or .env files):
 - `SAFE_BROWSING_API_KEY` - Google Safe Browsing API v4 key (url-service only, optional)
 - `DOMAIN_BLOCKLIST` / `DOMAIN_ALLOWLIST` - Comma-separated domain filter lists (url-service only, optional)
 - `URL_SIGNING_SECRET` - HMAC secret for signed short URLs (url-service only, optional)
+- `EVENT_RETENTION_DAYS` - Days to retain analytics events before cleanup (analytics-service only, default 90, optional)

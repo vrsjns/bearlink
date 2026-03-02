@@ -831,18 +831,169 @@ paths:
   /events:
     get:
       tags: [analytics]
-      summary: List all events
-      description: Returns all stored domain events
+      summary: List events (paginated)
+      description: |
+        Returns stored domain events. Requires JWT authentication.
+        Admin users see all events; regular users see only events where
+        `payload.userId` matches their own user ID.
       operationId: listEvents
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (default 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Events per page (default 50, max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+            example: 50
+        - name: type
+          in: query
+          description: Filter by event type
+          schema:
+            type: string
+            enum: [user_registered, url_created, url_updated, url_deleted, url_clicked]
+            example: url_clicked
+        - name: from
+          in: query
+          description: Filter events on or after this ISO date
+          schema:
+            type: string
+            format: date-time
+            example: '2026-01-01T00:00:00.000Z'
+        - name: to
+          in: query
+          description: Filter events on or before this ISO date
+          schema:
+            type: string
+            format: date-time
+            example: '2026-12-31T23:59:59.999Z'
+        - name: userId
+          in: query
+          description: Filter by payload userId (admin only; ignored for regular users)
+          schema:
+            type: integer
+            example: 5
       responses:
         '200':
-          description: List of events
+          description: Paginated list of events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEventList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: Internal server error
+
+  /analytics/urls/{shortId}/clicks:
+    get:
+      tags: [analytics]
+      summary: Get click counts for a URL
+      description: Returns total and today's click counts for the given short URL.
+      operationId: getUrlClicks
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: shortId
+          in: path
+          required: true
+          description: Short URL identifier
+          schema:
+            type: string
+            example: abc123
+      responses:
+        '200':
+          description: Click counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UrlClicksResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Internal server error
+
+  /analytics/summary:
+    get:
+      tags: [analytics]
+      summary: Get platform summary (admin)
+      description: Returns total user, URL, and click counts across all time. Admin only.
+      operationId: getAnalyticsSummary
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Platform summary counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: Internal server error
+
+  /analytics/top-urls:
+    get:
+      tags: [analytics]
+      summary: Get top URLs by clicks (admin)
+      description: |
+        Returns the top N URLs by click count for a given time period. Admin only.
+        Uses database-level aggregation — no row hydration.
+      operationId: getTopUrls
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: period
+          in: query
+          description: Time period expressed as `<N>d` (e.g. `7d`, `30d`). Defaults to all time.
+          schema:
+            type: string
+            pattern: '^\d+d$'
+            example: 7d
+        - name: limit
+          in: query
+          description: Maximum number of results (default 10, max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+      responses:
+        '200':
+          description: Top URLs ordered by click count descending
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Event'
+                  $ref: '#/components/schemas/TopUrlEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: Internal server error
 
   # ─── Health Endpoints (all services) ─────────────────────────────────────────
 
@@ -1365,6 +1516,66 @@ components:
           type: string
           format: date-time
           example: '2024-01-15T10:30:00.000Z'
+
+    PaginatedEventList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 50
+            total:
+              type: integer
+              example: 243
+
+    UrlClicksResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: All-time click count for this URL
+          example: 142
+        today:
+          type: integer
+          description: Click count since midnight UTC today
+          example: 17
+
+    AnalyticsSummary:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+          description: Total user_registered events (registered users)
+          example: 320
+        totalUrls:
+          type: integer
+          description: Total url_created events (created links)
+          example: 1405
+        totalClicks:
+          type: integer
+          description: Total url_clicked events
+          example: 28700
+
+    TopUrlEntry:
+      type: object
+      properties:
+        shortId:
+          type: string
+          description: Short URL identifier
+          example: abc123
+        clicks:
+          type: integer
+          description: Click count within the requested period
+          example: 58
 
     # ── Health ────────────────────────────────────────────────────────────────
 

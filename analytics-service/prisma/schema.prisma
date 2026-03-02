@@ -12,6 +12,10 @@ model Event {
   type      String
   payload   Json
   createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+  @@index([type, createdAt])
 }
 
 enum Role {

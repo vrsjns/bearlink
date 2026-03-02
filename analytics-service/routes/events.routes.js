@@ -1,5 +1,6 @@
 const express = require('express');
 const { apiLimiter } = require('shared/middlewares/rateLimit');
+const { authenticateJWT } = require('shared/middlewares/auth');
 const { createEventsController } = require('../controllers/events.controller');
 
 /**
@@ -12,7 +13,7 @@ const createEventsRoutes = ({ prisma }) => {
   const router = express.Router();
   const controller = createEventsController({ prisma });
 
-  router.get('/events', apiLimiter, controller.listEvents);
+  router.get('/events', authenticateJWT, apiLimiter, controller.listEvents);
 
   return router;
 };

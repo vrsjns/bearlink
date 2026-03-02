@@ -1,5 +1,6 @@
 const express = require('express');
 const { createEventsRoutes } = require('./events.routes');
+const { createAnalyticsRoutes } = require('./analytics.routes');
 
 /**
  * Create combined routes with dependencies
@@ -10,8 +11,8 @@ const { createEventsRoutes } = require('./events.routes');
 const createRoutes = ({ prisma }) => {
   const router = express.Router();
 
-  // Mount events routes
   router.use(createEventsRoutes({ prisma }));
+  router.use(createAnalyticsRoutes({ prisma }));
 
   return router;
 };

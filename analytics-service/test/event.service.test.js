@@ -12,7 +12,7 @@ describe('Event Service', () => {
     resetPrismaMocks();
   });
 
-  describe('createEventHandler', () => {
+  describe('createEventHandler — valid events', () => {
     it('should store user_registered event successfully', async () => {
       mockPrismaEvent.create.mockResolvedValue({
         id: 1,
@@ -27,10 +27,7 @@ describe('Event Service', () => {
       await handleEvent('user_registered', payload);
 
       expect(mockPrismaEvent.create).toHaveBeenCalledWith({
-        data: {
-          type: 'user_registered',
-          payload,
-        },
+        data: { type: 'user_registered', payload },
       });
     });
 
@@ -43,20 +40,12 @@ describe('Event Service', () => {
       });
 
       const handleEvent = createEventHandler({ prisma: mockPrisma });
-      const payload = {
-        id: 1,
-        shortId: 'abc123',
-        originalUrl: 'https://example.com',
-        userId: 1,
-      };
+      const payload = { id: 1, shortId: 'abc123', originalUrl: 'https://example.com', userId: 1 };
 
       await handleEvent('url_created', payload);
 
       expect(mockPrismaEvent.create).toHaveBeenCalledWith({
-        data: {
-          type: 'url_created',
-          payload,
-        },
+        data: { type: 'url_created', payload },
       });
     });
 
@@ -69,18 +58,12 @@ describe('Event Service', () => {
       });
 
       const handleEvent = createEventHandler({ prisma: mockPrisma });
-      const payload = {
-        shortId: 'abc123',
-        originalUrl: 'https://example.com',
-      };
+      const payload = { shortId: 'abc123', originalUrl: 'https://example.com' };
 
       await handleEvent('url_clicked', payload);
 
       expect(mockPrismaEvent.create).toHaveBeenCalledWith({
-        data: {
-          type: 'url_clicked',
-          payload,
-        },
+        data: { type: 'url_clicked', payload },
       });
     });
 
@@ -90,36 +73,46 @@ describe('Event Service', () => {
       const handleEvent = createEventHandler({ prisma: mockPrisma });
       const payload = { id: 1, email: 'test@example.com' };
 
-      // Should not throw - errors are logged but not propagated
+      // Should not throw — errors are logged but not propagated
       await expect(handleEvent('user_registered', payload)).resolves.not.toThrow();
 
       expect(mockPrismaEvent.create).toHaveBeenCalledWith({
-        data: {
-          type: 'user_registered',
-          payload,
-        },
+        data: { type: 'user_registered', payload },
       });
     });
+  });
 
-    it('should handle unknown event types', async () => {
-      mockPrismaEvent.create.mockResolvedValue({
-        id: 4,
-        type: 'unknown_event',
-        payload: { data: 'test' },
-        createdAt: new Date(),
-      });
-
+  describe('createEventHandler — payload validation', () => {
+    it('should discard events with unknown type', async () => {
       const handleEvent = createEventHandler({ prisma: mockPrisma });
-      const payload = { data: 'test' };
 
-      await handleEvent('unknown_event', payload);
+      await handleEvent('unknown_event', { data: 'test' });
 
-      expect(mockPrismaEvent.create).toHaveBeenCalledWith({
-        data: {
-          type: 'unknown_event',
-          payload,
-        },
-      });
+      expect(mockPrismaEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('should discard url_clicked missing required shortId', async () => {
+      const handleEvent = createEventHandler({ prisma: mockPrisma });
+
+      await handleEvent('url_clicked', { originalUrl: 'https://example.com' });
+
+      expect(mockPrismaEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('should discard user_registered missing required email', async () => {
+      const handleEvent = createEventHandler({ prisma: mockPrisma });
+
+      await handleEvent('user_registered', { id: 1, name: 'Test User' });
+
+      expect(mockPrismaEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('should discard url_created missing required userId', async () => {
+      const handleEvent = createEventHandler({ prisma: mockPrisma });
+
+      await handleEvent('url_created', { shortId: 'abc123' });
+
+      expect(mockPrismaEvent.create).not.toHaveBeenCalled();
     });
   });
 });
