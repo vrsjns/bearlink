@@ -9,13 +9,16 @@ import {
   UserProfile,
 } from '../../services/api/auth';
 import { getCurrentUser } from '../../lib/jwt';
-
-type Tab = 'profile' | 'password';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<Tab>('profile');
   const router = useRouter();
 
   // Profile edit state
@@ -62,7 +65,6 @@ export default function ProfilePage() {
 
   const handleEditToggle = () => {
     if (isEditing) {
-      // Cancel - reset to original values
       setEditName(profile?.name || '');
       setEditEmail(profile?.email || '');
       setEditPassword('');
@@ -80,7 +82,6 @@ export default function ProfilePage() {
       return;
     }
 
-    // Validate input
     if (!editName.trim()) {
       setProfileMessage({ type: 'error', text: 'Name is required' });
       return;
@@ -136,7 +137,6 @@ export default function ProfilePage() {
       return;
     }
 
-    // Client-side validation
     if (!currentPassword || !newPassword || !confirmPassword) {
       setPasswordMessage({ type: 'error', text: 'All fields are required' });
       return;
@@ -191,189 +191,165 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-8 bg-gray-100">
-      <div className="w-full max-w-md bg-white p-8 rounded-md shadow-md">
-        <h1 className="text-2xl font-bold mb-6">Profile</h1>
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="profile">
+            <TabsList className="mb-6 w-full">
+              <TabsTrigger value="profile" className="flex-1">
+                Profile
+              </TabsTrigger>
+              <TabsTrigger value="password" className="flex-1">
+                Password
+              </TabsTrigger>
+            </TabsList>
 
-        {/* Tab Navigation */}
-        <div className="flex border-b border-gray-200 mb-6">
-          <button
-            className={`py-2 px-4 font-medium ${
-              activeTab === 'profile'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-            onClick={() => setActiveTab('profile')}
-          >
-            Profile
-          </button>
-          <button
-            className={`py-2 px-4 font-medium ${
-              activeTab === 'password'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-            onClick={() => setActiveTab('password')}
-          >
-            Password
-          </button>
-        </div>
-
-        {/* Profile Tab */}
-        {activeTab === 'profile' && profile && (
-          <div>
-            {profileMessage && (
-              <div
-                className={`mb-4 p-3 rounded ${
-                  profileMessage.type === 'success'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-700'
-                }`}
-              >
-                {profileMessage.text}
-              </div>
-            )}
-
-            {isEditing ? (
-              <div className="space-y-4">
+            {/* Profile Tab */}
+            <TabsContent value="profile">
+              {profile && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  {profileMessage && (
+                    <Alert
+                      variant={profileMessage.type === 'error' ? 'destructive' : 'default'}
+                      className="mb-4"
+                    >
+                      <AlertDescription>{profileMessage.text}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {isEditing ? (
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <Label>Name</Label>
+                        <Input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Email</Label>
+                        <Input
+                          type="email"
+                          value={editEmail}
+                          onChange={(e) => setEditEmail(e.target.value)}
+                        />
+                      </div>
+                      {emailChanged && (
+                        <div className="space-y-1">
+                          <Label>
+                            Current Password <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            type="password"
+                            value={editPassword}
+                            onChange={(e) => setEditPassword(e.target.value)}
+                            placeholder="Required to change email"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <Label>Role</Label>
+                        <p className="px-3 py-2 bg-muted rounded-md text-muted-foreground">
+                          {profile.role}
+                        </p>
+                      </div>
+                      <div className="flex gap-3 mt-6">
+                        <Button
+                          onClick={handleProfileSave}
+                          disabled={profileLoading}
+                          className="flex-1"
+                        >
+                          {profileLoading ? 'Saving...' : 'Save'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={handleEditToggle}
+                          disabled={profileLoading}
+                          className="flex-1"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-muted-foreground">Name</Label>
+                        <p className="text-lg">{profile.name}</p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Email</Label>
+                        <p className="text-lg">{profile.email}</p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Role</Label>
+                        <p className="text-lg capitalize">{profile.role}</p>
+                      </div>
+                      <Button onClick={handleEditToggle} className="mt-4">
+                        Edit Profile
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                {emailChanged && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Current Password <span className="text-red-500">*</span>
-                    </label>
-                    <input
+              )}
+            </TabsContent>
+
+            {/* Password Tab */}
+            <TabsContent value="password">
+              <div>
+                {passwordMessage && (
+                  <Alert
+                    variant={passwordMessage.type === 'error' ? 'destructive' : 'default'}
+                    className="mb-4"
+                  >
+                    <AlertDescription>{passwordMessage.text}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <Label>Current Password</Label>
+                    <Input
                       type="password"
-                      value={editPassword}
-                      onChange={(e) => setEditPassword(e.target.value)}
-                      placeholder="Required to change email"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
                     />
                   </div>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                  <p className="px-3 py-2 bg-gray-100 rounded-md text-gray-600">{profile.role}</p>
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={handleProfileSave}
-                    disabled={profileLoading}
-                    className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:opacity-50"
+                  <div className="space-y-1">
+                    <Label>New Password</Label>
+                    <Input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      At least 8 characters with uppercase, lowercase, and number
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Confirm New Password</Label>
+                    <Input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    onClick={handlePasswordChange}
+                    disabled={passwordLoading}
+                    className="w-full mt-4"
                   >
-                    {profileLoading ? 'Saving...' : 'Save'}
-                  </button>
-                  <button
-                    onClick={handleEditToggle}
-                    disabled={profileLoading}
-                    className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
+                    {passwordLoading ? 'Changing...' : 'Change Password'}
+                  </Button>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Name</label>
-                  <p className="text-lg">{profile.name}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Email</label>
-                  <p className="text-lg">{profile.email}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Role</label>
-                  <p className="text-lg capitalize">{profile.role}</p>
-                </div>
-                <button
-                  onClick={handleEditToggle}
-                  className="mt-4 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600"
-                >
-                  Edit Profile
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Password Tab */}
-        {activeTab === 'password' && (
-          <div>
-            {passwordMessage && (
-              <div
-                className={`mb-4 p-3 rounded ${
-                  passwordMessage.type === 'success'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-700'
-                }`}
-              >
-                {passwordMessage.text}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Current Password
-                </label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  At least 8 characters with uppercase, lowercase, and number
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm New Password
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <button
-                onClick={handlePasswordChange}
-                disabled={passwordLoading}
-                className="w-full mt-4 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:opacity-50"
-              >
-                {passwordLoading ? 'Changing...' : 'Change Password'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }
