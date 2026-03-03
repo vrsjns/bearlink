@@ -1,6 +1,6 @@
 # Password Reset (Forgot Password)
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** auth-service, analytics-service, web-ui
 > **Priority:** high
 
