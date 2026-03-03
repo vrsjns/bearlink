@@ -1,7 +1,7 @@
 # Password Reset (Forgot Password)
 
 > **Status:** draft
-> **Service(s):** auth-service, web-ui
+> **Service(s):** auth-service, analytics-service, web-ui
 > **Priority:** high
 
 ## Goal
@@ -26,6 +26,9 @@ Current state:
 - The auth-service Prisma schema has no model for storing reset tokens.
 - Password emails are already delivered by the notification-service via the
   `email_notifications` RabbitMQ queue.
+- The analytics-service consumes all domain events from the `events` queue via a
+  `SCHEMAS` whitelist in `analytics-service/services/event.service.js`. Events with
+  unknown types are silently discarded.
 
 ## Requirements
 
@@ -33,15 +36,17 @@ Current state:
 
 - **R1:** The auth-service shall expose `POST /forgot-password` that accepts `{ email }`.
   If the email matches a registered account, the service shall generate a cryptographically
-  random, URL-safe token, persist it with an expiry of 1 hour, and publish an
-  `email_notifications` message containing the reset link. The endpoint shall always
-  return 200 with a generic success message regardless of whether the email exists.
+  random, URL-safe token, persist it with an expiry of 1 hour, publish an
+  `email_notifications` message containing the reset link, and publish a
+  `password_reset_requested` domain event to the `events` queue. The endpoint shall
+  always return 200 with a generic success message regardless of whether the email exists.
 
 - **R2:** The auth-service shall expose `POST /reset-password/:token` that accepts
   `{ password }`. The service shall look up the token, verify it has not expired and
   has not been used, update the user's password (bcrypt-hashed), mark the token as
-  used, and return 200. If the token is invalid, expired, or already used, the service
-  shall return 400.
+  used, publish a `password_reset_completed` domain event to the `events` queue, and
+  return 200. If the token is invalid, expired, or already used, the service shall
+  return 400.
 
 - **R3:** The new password supplied to `POST /reset-password/:token` shall pass the
   same strength validation used during registration (`isValidPassword`): at least 8
@@ -65,24 +70,30 @@ Current state:
   with the rest of the UI (Card, Input, Button, Label), replacing the raw HTML elements
   currently in the form.
 
+- **R9:** The analytics-service `SCHEMAS` whitelist shall be extended to recognise
+  `password_reset_requested` (required field: `userId`) and `password_reset_completed`
+  (required field: `userId`) so that both events are persisted rather than discarded.
+
 ### Non-Functional
 
-- **R9:** Tokens shall be generated with Node.js `crypto.randomBytes(32)` encoded as
+- **R10:** Tokens shall be generated with Node.js `crypto.randomBytes(32)` encoded as
   hex, giving 256 bits of entropy.
-- **R10:** The `POST /forgot-password` endpoint shall be covered by the existing
+- **R11:** The `POST /forgot-password` endpoint shall be covered by the existing
   `authLimiter` rate limiter to prevent email flooding.
-- **R11:** No new external dependencies shall be introduced in the auth-service (token
+- **R12:** No new external dependencies shall be introduced in the auth-service (token
   generation uses the built-in `crypto` module; email delivery reuses the existing
-  `email_notifications` queue).
+  `email_notifications` queue; domain events reuse the existing `publishEvent` helper).
 
 ## Acceptance Criteria
 
 - [ ] Given a registered email, `POST /forgot-password` returns 200 with a generic
-      message and publishes one `email_notifications` message containing a reset link.
+      message, publishes one `email_notifications` message containing a reset link, and
+      publishes one `password_reset_requested` event to the `events` queue.
 - [ ] Given an unregistered email, `POST /forgot-password` returns 200 with the same
-      generic message and publishes no email.
+      generic message and publishes no email and no domain event.
 - [ ] Given a valid, unexpired, unused token, `POST /reset-password/:token` with a
-      valid new password returns 200 and the user can log in with the new password.
+      valid new password returns 200, the user can log in with the new password, and a
+      `password_reset_completed` event is published to the `events` queue.
 - [ ] Given a valid token, `POST /reset-password/:token` with a password that fails
       strength validation returns 400.
 - [ ] Given an expired token, `POST /reset-password/:token` returns 400.
@@ -93,6 +104,9 @@ Current state:
 - [ ] `POST /forgot-password` without a body or with a malformed email returns 400.
 - [ ] The reset-password page in the web-ui shows an error message when the backend
       returns 400.
+- [ ] The analytics-service stores `password_reset_requested` and
+      `password_reset_completed` events; it does not log a "Unknown event type" warning
+      for either.
 - [ ] Existing login, register, and logout behaviour is unchanged.
 
 ## Out of Scope
@@ -108,8 +122,12 @@ Current state:
 
 - [ ] `docs/openapi.yaml` — add `POST /forgot-password` and `POST /reset-password/{token}`
       under the `auth` tag
+- [ ] `docs/asyncapi.yaml` — add `PasswordResetRequested` and `PasswordResetCompleted`
+      messages to the `events` channel; add their schemas and payloads to `components`
 - [ ] `auth-service/CLAUDE.md` — document the two new endpoints and the new
       `PasswordResetToken` model
+- [ ] `analytics-service/CLAUDE.md` — add `password_reset_requested` and
+      `password_reset_completed` to the Events Consumed table
 
 ## Tasks
 
@@ -141,7 +159,16 @@ Add `FRONTEND_URL` to `auth-service` in `docker-compose.yml` (value:
 `http://localhost:3000` for local dev). Document the variable in the root `CLAUDE.md`
 environment variables table.
 
-### T3 -- Implement POST /forgot-password (R1, R5, R9, R10, R11)
+### T3 -- Add password_reset event types to shared constants (R1, R2)
+
+In `shared/events/constants.js`, add to `EVENT_TYPES`:
+
+```javascript
+PASSWORD_RESET_REQUESTED: 'password_reset_requested',
+PASSWORD_RESET_COMPLETED: 'password_reset_completed',
+```
+
+### T4 -- Implement POST /forgot-password (R1, R5, R10, R11, R12)
 
 Create `auth-service/services/passwordReset.service.js` exporting:
 
@@ -154,7 +181,7 @@ In `auth-service/controllers/auth.controller.js`, add a `forgotPassword` handler
 2. Look up the user by email with `prisma.user.findUnique`.
 3. If the user exists: generate a token, store a `PasswordResetToken` row
    (`expiresAt = now + 1h`), publish an `email_notifications` message with the reset
-   link.
+   link, and publish a `password_reset_requested` event (`{ userId: user.id }`).
 4. Always return `200 { message: 'If that email is registered you will receive a
 reset link shortly.' }`.
 
@@ -162,28 +189,39 @@ Register `router.post('/forgot-password', authLimiter, controller.forgotPassword
 `auth-service/routes/auth.routes.js`. Exempt the route from CSRF middleware (it must
 be added before the CSRF middleware is applied, or whitelisted within it).
 
-### T4 -- Implement POST /reset-password/:token (R2, R3, R5)
+### T5 -- Implement POST /reset-password/:token (R2, R3, R5)
 
 In `auth-service/controllers/auth.controller.js`, add a `resetPassword` handler:
 
 1. Validate that `password` is present and passes `isValidPassword`; return 400 if not.
-2. Look up the `PasswordResetToken` by `token`.
+2. Look up the `PasswordResetToken` by `token` (include the related `user`).
 3. If not found, expired (`expiresAt < now`), or already used (`usedAt != null`),
    return `400 { error: 'Invalid or expired reset token.' }`.
 4. Hash the new password with bcrypt and update `prisma.user.update`.
 5. Set `usedAt = now` on the token with `prisma.passwordResetToken.update`.
-6. Return `200 { message: 'Password reset successful.' }`.
+6. Publish a `password_reset_completed` event (`{ userId: token.userId }`).
+7. Return `200 { message: 'Password reset successful.' }`.
 
 Register `router.post('/reset-password/:token', controller.resetPassword)` in
 `auth-service/routes/auth.routes.js` before the CSRF middleware.
 
-### T5 -- Write tests for new endpoints (R1, R2, R3)
+### T6 -- Register new event types in analytics-service (R9)
+
+In `analytics-service/services/event.service.js`, extend `SCHEMAS`:
+
+```javascript
+password_reset_requested: ['userId'],
+password_reset_completed: ['userId'],
+```
+
+### T7 -- Write tests for new endpoints (R1, R2, R3, R9)
 
 In `auth-service/test/auth.routes.test.ts`, add test cases covering all acceptance
-criteria: valid flow, unregistered email, expired token, used token, unknown token,
+criteria: valid flow (verifying both email and domain event are published), unregistered
+email (verifying neither is published), expired token, used token, unknown token,
 password validation failure. Use the existing mock patterns for Prisma and RabbitMQ.
 
-### T6 -- Fix error handling in reset-password web-ui page (R7, R8)
+### T8 -- Fix error handling in reset-password web-ui page (R7, R8)
 
 In `web-ui/src/app/reset-password/[token]/page.tsx`:
 
@@ -196,7 +234,17 @@ In `web-ui/src/app/reset-password/[token]/page.tsx`:
 4. Remove the unused `axios` import (the page already uses `resetPassword` from
    `@/services/api/auth`).
 
-### T7 -- Update OpenAPI docs (Docs to Update)
+### T9 -- Update AsyncAPI and OpenAPI docs (Docs to Update)
+
+In `docs/asyncapi.yaml`:
+
+- Add `PasswordResetRequested` and `PasswordResetCompleted` to the `oneOf` lists in the
+  `events` channel `publish` and `subscribe` operations.
+- Add both as message definitions under `components/messages`, each referencing a new
+  schema.
+- Add `PasswordResetRequestedEvent` and `PasswordResetCompletedEvent` schemas under
+  `components/schemas`. Each wraps a payload with a single required field `userId`
+  (integer).
 
 In `docs/openapi.yaml`, under the `auth` tag add:
 
