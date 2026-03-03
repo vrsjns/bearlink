@@ -108,15 +108,15 @@ const ManageURLs = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-gray-500">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-muted">
+        <div className="text-muted-foreground">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
-      <h1 className="text-5xl font-bold mb-8 text-blue-600">Manage BearLink URLs</h1>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-muted p-4">
+      <h1 className="text-5xl font-bold mb-8 text-primary">Manage BearLink URLs</h1>
       <Card className="w-full max-w-4xl">
         <CardContent className="pt-6">
           {urls.length === 0 ? (
@@ -144,7 +144,7 @@ const ManageURLs = () => {
                           className="object-cover rounded w-12 h-12 mx-auto"
                         />
                       ) : (
-                        <div className="w-12 h-12 mx-auto bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">
+                        <div className="w-12 h-12 mx-auto bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
                           {url.previewFetchedAt ? 'N/A' : '...'}
                         </div>
                       )}
@@ -152,7 +152,7 @@ const ManageURLs = () => {
                     <TableCell>
                       <a
                         href={`${urlServiceUrl}/${url.shortId}`}
-                        className="text-blue-600 underline"
+                        className="text-primary underline"
                       >
                         {url.shortId}
                       </a>
@@ -168,17 +168,17 @@ const ManageURLs = () => {
                         <div>
                           <span>{url.originalUrl}</span>
                           {url.previewTitle && (
-                            <div className="text-sm font-medium text-gray-700 mt-1 truncate">
+                            <div className="text-sm font-medium text-foreground mt-1 truncate">
                               {url.previewTitle}
                             </div>
                           )}
                           {url.previewDescription && (
-                            <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                               {url.previewDescription}
                             </div>
                           )}
                           {!url.previewFetchedAt && (
-                            <div className="text-xs text-gray-400 italic mt-0.5">
+                            <div className="text-xs text-muted-foreground italic mt-0.5">
                               Preview loading...
                             </div>
                           )}

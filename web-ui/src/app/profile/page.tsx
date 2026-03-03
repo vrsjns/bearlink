@@ -181,8 +181,8 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-gray-500">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-muted">
+        <div className="text-muted-foreground">Loading...</div>
       </div>
     );
   }
@@ -190,7 +190,7 @@ export default function ProfilePage() {
   const emailChanged = editEmail !== profile?.email;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-8 bg-gray-100">
+    <div className="min-h-screen flex items-center justify-center p-8 bg-muted">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Profile</CardTitle>
@@ -240,7 +240,7 @@ export default function ProfilePage() {
                       {emailChanged && (
                         <div className="space-y-1">
                           <Label>
-                            Current Password <span className="text-red-500">*</span>
+                            Current Password <span className="text-destructive">*</span>
                           </Label>
                           <Input
                             type="password"

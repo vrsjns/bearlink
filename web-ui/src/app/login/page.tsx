@@ -34,8 +34,8 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
-      <h1 className="text-5xl font-bold mb-8 text-blue-600">BearLink Login</h1>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-muted p-4">
+      <h1 className="text-5xl font-bold mb-8 text-primary">BearLink Login</h1>
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
@@ -69,7 +69,7 @@ const Login = () => {
         </CardContent>
       </Card>
       <p className="mt-4">
-        <a href="/forgot-password" className="text-blue-600 underline">
+        <a href="/forgot-password" className="text-primary underline">
           Forgot Password?
         </a>
       </p>

@@ -38,16 +38,16 @@ const Home = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-gray-500">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-muted">
+        <div className="text-muted-foreground">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
-      <h1 className="text-5xl font-bold mb-8 text-blue-600">BearLink</h1>
-      <p className="mb-8 text-xl text-gray-700">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-muted p-4">
+      <h1 className="text-5xl font-bold mb-8 text-primary">BearLink</h1>
+      <p className="mb-8 text-xl text-muted-foreground">
         Shorten your URLs with ease and track their performance!
       </p>
       <Card className="w-full max-w-md">
@@ -74,7 +74,7 @@ const Home = () => {
         <div className="mt-8">
           <p className="text-lg">
             Short URL:{' '}
-            <a href={shortUrl} className="text-blue-600 underline">
+            <a href={shortUrl} className="text-primary underline">
               {shortUrl}
             </a>
           </p>
