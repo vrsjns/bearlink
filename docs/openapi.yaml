@@ -19,6 +19,7 @@ servers:
           - '5000'
           - '6000'
           - '7000'
+          - '8500'
         default: '5000'
 
 tags:
@@ -34,6 +35,8 @@ tags:
     description: Notification service (port 7000)
   - name: health
     description: Health and readiness checks
+  - name: audit
+    description: Audit log service -- append-only event store (port 8500)
 
 paths:
   # ─── Auth Service Endpoints ──────────────────────────────────────────────────
@@ -1122,6 +1125,166 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReadyResponse'
 
+  # --- Audit Service Endpoints ------------------------------------------------
+
+  /internal/audit-events:
+    post:
+      tags: [audit]
+      summary: Ingest outbox events
+      description: |
+        Internal endpoint. Accepts an array of outbox event objects from source
+        services. Authenticated by a shared secret in the X-Audit-Secret header.
+        Uses idempotent upsert -- duplicate eventId values are silently skipped.
+      operationId: ingestAuditEvents
+      security: []
+      parameters:
+        - in: header
+          name: X-Audit-Secret
+          required: true
+          schema:
+            type: string
+          description: Shared secret matching AUDIT_INTERNAL_SECRET env var
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [eventId, eventType, sourceService, payload]
+                properties:
+                  eventId:
+                    type: string
+                    description: Source-service-generated unique identifier for idempotency
+                  eventType:
+                    type: string
+                    example: url_created
+                  actorId:
+                    type: string
+                    nullable: true
+                    description: User ID of the actor, null for system events
+                  sourceService:
+                    type: string
+                    example: url-service
+                  payload:
+                    type: object
+                    description: Full event payload from the outbox
+                  createdAt:
+                    type: string
+                    format: date-time
+      responses:
+        '200':
+          description: Events processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: integer
+                  inserted:
+                    type: integer
+                  skipped:
+                    type: integer
+        '400':
+          description: Body is not a non-empty array
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or incorrect X-Audit-Secret header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /audit:
+    get:
+      tags: [audit]
+      summary: Query audit log
+      description: |
+        Returns a paginated, filtered list of AuditEntry records.
+        Requires admin JWT authentication.
+      operationId: queryAuditLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - in: query
+          name: type
+          schema:
+            type: string
+          description: Filter by eventType (e.g. url_created)
+        - in: query
+          name: actorId
+          schema:
+            type: string
+          description: Filter by actorId
+        - in: query
+          name: service
+          schema:
+            type: string
+          description: Filter by sourceService (e.g. url-service)
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+          description: Lower bound on createdAt (inclusive)
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+          description: Upper bound on createdAt (inclusive)
+      responses:
+        '200':
+          description: Paginated list of audit entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEntry'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated user does not have admin role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1698,6 +1861,26 @@ components:
               description: Only present in notification-service
 
     # ── Shared ────────────────────────────────────────────────────────────────
+
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: string
+        eventType:
+          type: string
+        actorId:
+          type: string
+          nullable: true
+        sourceService:
+          type: string
+        payload:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
 
     Error:
       type: object

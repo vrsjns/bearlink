@@ -65,14 +65,15 @@ kubectl get pods -n bearlink
 
 ### Services
 
-| Service              | Port | Database          | Purpose                                               |
-| -------------------- | ---- | ----------------- | ----------------------------------------------------- |
-| auth-service         | 4000 | auth_service      | User registration, login, JWT authentication          |
-| url-service          | 5000 | url_service       | URL shortening, redirection, click tracking           |
-| analytics-service    | 6000 | analytics_service | Authenticated event storage, aggregation, and query   |
-| notification-service | 7000 | -                 | Email delivery via SMTP                               |
-| preview-service      | 8000 | -                 | Link metadata scraping (Python/FastAPI/BeautifulSoup) |
-| web-ui               | 3000 | -                 | Next.js frontend                                      |
+| Service              | Port | Database          | Purpose                                                            |
+| -------------------- | ---- | ----------------- | ------------------------------------------------------------------ |
+| auth-service         | 4000 | auth_service      | User registration, login, JWT authentication                       |
+| url-service          | 5000 | url_service       | URL shortening, redirection, click tracking                        |
+| analytics-service    | 6000 | analytics_service | Authenticated event storage, aggregation, and query                |
+| notification-service | 7000 | -                 | Email delivery via SMTP                                            |
+| preview-service      | 8000 | -                 | Link metadata scraping (Python/FastAPI/BeautifulSoup)              |
+| audit-service        | 8500 | audit_service     | Append-only audit log; receives outbox events from source services |
+| web-ui               | 3000 | -                 | Next.js frontend                                                   |
 
 Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (1025/8025)
 
@@ -203,3 +204,5 @@ Key variables (set via docker-compose or .env files):
 - `DOMAIN_BLOCKLIST` / `DOMAIN_ALLOWLIST` - Comma-separated domain filter lists (url-service only, optional)
 - `URL_SIGNING_SECRET` - HMAC secret for signed short URLs (url-service only, optional)
 - `EVENT_RETENTION_DAYS` - Days to retain analytics events before cleanup (analytics-service only, default 90, optional)
+- `AUDIT_SERVICE_URL` - Base URL of audit-service (auth-service and url-service outbox pollers; optional, rows accumulate if unset)
+- `AUDIT_INTERNAL_SECRET` - Shared secret for POST /internal/audit-events (audit-service required; source services write to env)

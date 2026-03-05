@@ -1,0 +1,18 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model AuditEntry {
+  id            Int      @id @default(autoincrement())
+  eventId       String   @unique
+  eventType     String
+  actorId       String?
+  sourceService String
+  payload       Json
+  createdAt     DateTime @default(now())
+}
