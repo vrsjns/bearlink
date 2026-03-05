@@ -25,7 +25,20 @@ Read the spec file provided in the arguments. Understand:
 - Which service(s) are affected
 - Which docs need updating (openapi.yaml, asyncapi.yaml)
 
-## Step 2 — Determine what to implement
+## Step 2 — Check for tasks; generate if missing
+
+Check whether the spec has a `## Tasks` section with at least one task entry
+(`### Task`).
+
+If the Tasks section is absent or empty:
+
+- Use the Agent tool to invoke the `generate-tasks` skill on this spec file.
+  Pass the spec path as the argument, e.g.:
+  `Agent(subagent_type="general", prompt="Use the generate-tasks skill on spec/my-feature.md")`
+- Wait for the agent to finish, then re-read the spec file to pick up the generated tasks.
+- If the spec status is `draft`, stop and ask the user to get the spec approved before implementing.
+
+## Step 3 — Determine what to implement
 
 If a task number was provided in the arguments:
 
@@ -39,7 +52,7 @@ If no task number was provided:
 
 If all tasks are already done, report that and stop.
 
-## Step 3 — Branch setup
+## Step 4 — Branch setup
 
 Check the current git branch.
 
@@ -47,7 +60,7 @@ Check the current git branch.
 - If on any other branch (including master), create and switch to `feat/<spec-name>` where `<spec-name>` is the spec filename without the `.md` extension (e.g. `spec/password-reset.md` → `feat/password-reset`).
 - Never implement directly on master.
 
-## Step 4 — Implement each task
+## Step 5 — Implement each task
 
 For each task being implemented:
 
@@ -63,7 +76,7 @@ For each task being implemented:
 6. If the task touches RabbitMQ events or queues, update `docs/asyncapi.yaml`.
 7. After the task is complete, mark it done in the spec file by changing `- [ ]` to `- [x]` for that task.
 
-## Step 5 — When all tasks are done
+## Step 6 — When all tasks are done
 
 After the final task is marked done:
 
