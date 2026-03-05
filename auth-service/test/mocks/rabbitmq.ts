@@ -14,6 +14,8 @@ export const mockEventPublisher = {
   publishUrlClicked: vi.fn(),
   publishEmailNotification: vi.fn(),
   publishEvent: vi.fn(),
+  publishPasswordResetRequested: vi.fn(),
+  publishPasswordResetCompleted: vi.fn(),
 };
 
 export const createMockEventPublisher = () => mockEventPublisher;

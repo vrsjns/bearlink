@@ -8,6 +8,7 @@ const {
 } = require('shared/utils/validation');
 const { generateToken, sanitizeUser } = require('../services/token.service');
 const { generateCsrfToken } = require('../services/csrf.service');
+const { generateResetToken, buildResetLink } = require('../services/passwordReset.service');
 
 const logger = createLogger('auth-service');
 
@@ -111,11 +112,96 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
     res.json({ csrfToken: generateCsrfToken(jwtToken, process.env.JWT_SECRET) });
   };
 
+  const forgotPassword = async (req, res) => {
+    const { email } = req.body;
+
+    if (!email || !isValidEmail(email)) {
+      return validationError(res, 'A valid email address is required.');
+    }
+
+    try {
+      const user = await prisma.user.findUnique({ where: { email } });
+
+      if (user) {
+        const token = generateResetToken();
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        await prisma.passwordResetToken.create({
+          data: { token, userId: user.id, expiresAt },
+        });
+
+        eventPublisher.publishEmailNotification({
+          to: email,
+          subject: 'Reset your BearLink password',
+          text: `Hello ${user.name},\n\nClick the link below to reset your password. The link expires in 1 hour.\n\n${buildResetLink(token)}\n\nIf you did not request a password reset, you can ignore this email.\n\nBearLink Team`,
+        });
+
+        eventPublisher.publishPasswordResetRequested({ userId: user.id });
+
+        logger.info('Password reset requested', { userId: user.id });
+      }
+    } catch (error) {
+      logger.error('Error processing forgot-password request', { error: error.message });
+    }
+
+    res.json({ message: 'If that email is registered you will receive a reset link shortly.' });
+  };
+
+  const resetPassword = async (req, res) => {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required.' });
+    }
+
+    if (!isValidPassword(password)) {
+      return res.status(400).json({
+        error:
+          'Password must be at least 8 characters and contain uppercase, lowercase, and a number.',
+      });
+    }
+
+    try {
+      const resetToken = await prisma.passwordResetToken.findUnique({
+        where: { token },
+        include: { user: true },
+      });
+
+      if (!resetToken || resetToken.expiresAt < new Date() || resetToken.usedAt !== null) {
+        return res.status(400).json({ error: 'Invalid or expired reset token.' });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      await prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { password: hashedPassword },
+      });
+
+      await prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { usedAt: new Date() },
+      });
+
+      eventPublisher.publishPasswordResetCompleted({ userId: resetToken.userId });
+
+      logger.info('Password reset completed', { userId: resetToken.userId });
+
+      res.json({ message: 'Password reset successful.' });
+    } catch (error) {
+      logger.error('Error resetting password', { error: error.message });
+      res.status(400).json({ error: 'Password reset failed.' });
+    }
+  };
+
   return {
     register,
     login,
     logout,
     getCsrfToken,
+    forgotPassword,
+    resetPassword,
   };
 };
 

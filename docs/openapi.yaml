@@ -130,6 +130,91 @@ paths:
         '204':
           description: Logged out successfully
 
+  /forgot-password:
+    post:
+      tags: [auth]
+      summary: Request a password reset email
+      description: >
+        Accepts an email address and, if it matches a registered account, sends a
+        password reset link to that address. Always returns 200 regardless of
+        whether the email is registered (to prevent user enumeration).
+        Covered by the `authLimiter` rate limiter.
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+      responses:
+        '200':
+          description: Request processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: If that email is registered you will receive a reset link shortly.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /reset-password/{token}:
+    post:
+      tags: [auth]
+      summary: Reset password using a reset token
+      description: >
+        Validates the reset token and, if it is valid, unexpired, and unused,
+        updates the user's password to the supplied value.
+      operationId: resetPassword
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            example: a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  description: New password (min 8 chars, must contain uppercase, lowercase, and a number)
+                  example: NewPassword1
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Password reset successful.
+        '400':
+          description: Invalid or expired token, or password validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid or expired reset token.
+
   /csrf-token:
     get:
       tags: [auth]
