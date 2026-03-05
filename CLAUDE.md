@@ -198,6 +198,7 @@ Key variables (set via docker-compose or .env files):
 - `RABBITMQ_URL` - RabbitMQ connection URL
 - `SMTP_HOST`, `SMTP_PORT` - Mail server configuration
 - `REDIS_URL` - Redis connection string (url-service only, optional)
+- `FRONTEND_URL` - Base URL of the web-ui, used to build password reset links (auth-service only, e.g. `http://localhost:3000`)
 - `SAFE_BROWSING_API_KEY` - Google Safe Browsing API v4 key (url-service only, optional)
 - `DOMAIN_BLOCKLIST` / `DOMAIN_ALLOWLIST` - Comma-separated domain filter lists (url-service only, optional)
 - `URL_SIGNING_SECRET` - HMAC secret for signed short URLs (url-service only, optional)

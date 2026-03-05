@@ -8,6 +8,8 @@ const SCHEMAS = {
   url_updated: ['shortId', 'userId'],
   url_deleted: ['shortId', 'userId'],
   url_clicked: ['shortId'],
+  password_reset_requested: ['userId'],
+  password_reset_completed: ['userId'],
 };
 
 /**

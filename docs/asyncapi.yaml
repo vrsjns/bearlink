@@ -39,6 +39,8 @@ channels:
           - $ref: '#/components/messages/UrlUpdated'
           - $ref: '#/components/messages/UrlDeleted'
           - $ref: '#/components/messages/UrlClicked'
+          - $ref: '#/components/messages/PasswordResetRequested'
+          - $ref: '#/components/messages/PasswordResetCompleted'
     subscribe:
       operationId: consumeEvent
       summary: Consume domain events
@@ -49,6 +51,8 @@ channels:
           - $ref: '#/components/messages/UrlUpdated'
           - $ref: '#/components/messages/UrlDeleted'
           - $ref: '#/components/messages/UrlClicked'
+          - $ref: '#/components/messages/PasswordResetRequested'
+          - $ref: '#/components/messages/PasswordResetCompleted'
 
   email_notifications:
     description: |
@@ -139,6 +143,22 @@ components:
       contentType: application/json
       payload:
         $ref: '#/components/schemas/UrlClickedEvent'
+
+    PasswordResetRequested:
+      name: PasswordResetRequested
+      title: Password Reset Requested Event
+      summary: Published when a user requests a password reset
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PasswordResetRequestedEvent'
+
+    PasswordResetCompleted:
+      name: PasswordResetCompleted
+      title: Password Reset Completed Event
+      summary: Published when a user successfully resets their password
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PasswordResetCompletedEvent'
 
     EmailNotification:
       name: EmailNotification
@@ -391,6 +411,44 @@ components:
           nullable: true
           description: Two-letter country code derived from IP via GeoIP lookup (null if unresolved)
           example: US
+
+    PasswordResetRequestedEvent:
+      type: object
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          const: password_reset_requested
+        payload:
+          $ref: '#/components/schemas/PasswordResetRequestedPayload'
+
+    PasswordResetRequestedPayload:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: integer
+          description: ID of the user who requested the reset
+          example: 42
+
+    PasswordResetCompletedEvent:
+      type: object
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          const: password_reset_completed
+        payload:
+          $ref: '#/components/schemas/PasswordResetCompletedPayload'
+
+    PasswordResetCompletedPayload:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: integer
+          description: ID of the user whose password was reset
+          example: 42
 
     EmailNotificationPayload:
       type: object
