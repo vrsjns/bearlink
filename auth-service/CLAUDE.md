@@ -8,18 +8,20 @@ User authentication service handling registration, login, and user management.
 
 ```
 auth-service/
-├── index.js              # Entry point: DB/RabbitMQ init, server start, shutdown
-├── app.js                # Express app factory: middleware setup, route mounting
-├── routes/
-│   ├── index.js          # Combine routers, export single router factory
-│   ├── auth.routes.js    # POST /register, POST /login
-│   └── users.routes.js   # /users CRUD, /profile, /password
-├── controllers/
-│   ├── auth.controller.js    # register, login handlers
-│   └── users.controller.js   # user management handlers
-├── services/
-│   └── token.service.js  # generateToken, sanitizeUser helpers
-└── CLAUDE.md
++-- index.js              # Entry point: DB/RabbitMQ init, server start, shutdown
++-- app.js                # Express app factory: middleware setup, route mounting
++-- routes/
+|   +-- index.js          # Combine routers, export single router factory
+|   +-- auth.routes.js    # POST /register, POST /login, POST /forgot-password, POST /reset-password/:token
+|   \-- users.routes.js   # /users CRUD, /profile, /password
++-- controllers/
+|   +-- auth.controller.js    # register, login, forgotPassword, resetPassword handlers
+|   \-- users.controller.js   # user management handlers
++-- services/
+|   +-- token.service.js           # generateToken, sanitizeUser helpers
+|   +-- passwordReset.service.js   # generateResetToken, buildResetLink helpers
+|   \-- csrf.service.js            # CSRF token generation and verification
+\-- CLAUDE.md
 ```
 
 ## Dependency Injection Pattern
@@ -53,6 +55,15 @@ This service **publishes** events to RabbitMQ. It does not consume events.
 1. `user_registered` - Domain event with sanitized user data (no password)
 2. Email notification - Welcome email to the new user
 
+**On password reset request (`POST /forgot-password`):**
+
+1. `password_reset_requested` - Domain event with `{ userId }` (only when email is registered)
+2. Email notification - Reset link email to the user
+
+**On password reset completion (`POST /reset-password/:token`):**
+
+1. `password_reset_completed` - Domain event with `{ userId }`
+
 ### Code Pattern
 
 ```javascript
@@ -82,4 +93,14 @@ Uses `auth_service` PostgreSQL database with Prisma ORM.
 - `email` - Unique email address
 - `password` - Bcrypt hashed password
 - `name` - Display name
-- `role` - User role (default: 'user', can be 'admin')
+- `role` - User role (default: 'USER', can be 'ADMIN')
+- `resetTokens` - Relation to PasswordResetToken
+
+### PasswordResetToken Model
+
+- `id` - Primary key
+- `token` - Unique hex string (64 chars, 256 bits of entropy)
+- `userId` - FK to User (cascade delete)
+- `expiresAt` - Expiry timestamp (1 hour from creation)
+- `usedAt` - Set when the token is consumed; null if unused
+- `createdAt` - Creation timestamp

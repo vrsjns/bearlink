@@ -81,6 +81,22 @@ const createEventPublisher = (channel) => {
   };
 
   /**
+   * Publishes a password_reset_requested event
+   * @param {{ userId: number }} payload
+   */
+  const publishPasswordResetRequested = (payload) => {
+    publishEvent(EVENT_TYPES.PASSWORD_RESET_REQUESTED, payload);
+  };
+
+  /**
+   * Publishes a password_reset_completed event
+   * @param {{ userId: number }} payload
+   */
+  const publishPasswordResetCompleted = (payload) => {
+    publishEvent(EVENT_TYPES.PASSWORD_RESET_COMPLETED, payload);
+  };
+
+  /**
    * Publishes an email notification
    * @param {import('./types').EmailNotificationPayload} payload
    */
@@ -99,6 +115,8 @@ const createEventPublisher = (channel) => {
     publishUrlUpdated,
     publishUrlDeleted,
     publishUrlClicked,
+    publishPasswordResetRequested,
+    publishPasswordResetCompleted,
     publishEmailNotification,
   };
 };

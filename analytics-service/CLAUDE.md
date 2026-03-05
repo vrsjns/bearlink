@@ -53,13 +53,15 @@ Consumes **all** domain events from the `events` queue and stores them as audit 
 Payloads are validated against per-type schemas before being persisted — unknown types and
 payloads missing required fields are discarded with a warning log.
 
-| Event             | Publisher    | Required fields validated |
-| ----------------- | ------------ | ------------------------- |
-| `user_registered` | auth-service | `id`, `email`             |
-| `url_created`     | url-service  | `shortId`, `userId`       |
-| `url_updated`     | url-service  | `shortId`, `userId`       |
-| `url_deleted`     | url-service  | `shortId`, `userId`       |
-| `url_clicked`     | url-service  | `shortId`                 |
+| Event                      | Publisher    | Required fields validated |
+| -------------------------- | ------------ | ------------------------- |
+| `user_registered`          | auth-service | `id`, `email`             |
+| `url_created`              | url-service  | `shortId`, `userId`       |
+| `url_updated`              | url-service  | `shortId`, `userId`       |
+| `url_deleted`              | url-service  | `shortId`, `userId`       |
+| `url_clicked`              | url-service  | `shortId`                 |
+| `password_reset_requested` | auth-service | `userId`                  |
+| `password_reset_completed` | auth-service | `userId`                  |
 
 ### Code Pattern
 

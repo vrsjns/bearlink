@@ -1,6 +1,6 @@
 # Password Reset (Forgot Password)
 
-> **Status:** approved
+> **Status:** done
 > **Service(s):** auth-service, analytics-service, web-ui
 > **Priority:** high
 
@@ -86,28 +86,28 @@ Current state:
 
 ## Acceptance Criteria
 
-- [ ] Given a registered email, `POST /forgot-password` returns 200 with a generic
+- [x] Given a registered email, `POST /forgot-password` returns 200 with a generic
       message, publishes one `email_notifications` message containing a reset link, and
       publishes one `password_reset_requested` event to the `events` queue.
-- [ ] Given an unregistered email, `POST /forgot-password` returns 200 with the same
+- [x] Given an unregistered email, `POST /forgot-password` returns 200 with the same
       generic message and publishes no email and no domain event.
-- [ ] Given a valid, unexpired, unused token, `POST /reset-password/:token` with a
+- [x] Given a valid, unexpired, unused token, `POST /reset-password/:token` with a
       valid new password returns 200, the user can log in with the new password, and a
       `password_reset_completed` event is published to the `events` queue.
-- [ ] Given a valid token, `POST /reset-password/:token` with a password that fails
+- [x] Given a valid token, `POST /reset-password/:token` with a password that fails
       strength validation returns 400.
-- [ ] Given an expired token, `POST /reset-password/:token` returns 400.
-- [ ] Given an already-used token, `POST /reset-password/:token` returns 400.
-- [ ] Given an unknown token, `POST /reset-password/:token` returns 400.
-- [ ] After a successful password reset the token's `usedAt` field is set in the
+- [x] Given an expired token, `POST /reset-password/:token` returns 400.
+- [x] Given an already-used token, `POST /reset-password/:token` returns 400.
+- [x] Given an unknown token, `POST /reset-password/:token` returns 400.
+- [x] After a successful password reset the token's `usedAt` field is set in the
       database.
-- [ ] `POST /forgot-password` without a body or with a malformed email returns 400.
-- [ ] The reset-password page in the web-ui shows an error message when the backend
+- [x] `POST /forgot-password` without a body or with a malformed email returns 400.
+- [x] The reset-password page in the web-ui shows an error message when the backend
       returns 400.
-- [ ] The analytics-service stores `password_reset_requested` and
+- [x] The analytics-service stores `password_reset_requested` and
       `password_reset_completed` events; it does not log a "Unknown event type" warning
       for either.
-- [ ] Existing login, register, and logout behaviour is unchanged.
+- [x] Existing login, register, and logout behaviour is unchanged.
 
 ## Out of Scope
 
@@ -120,13 +120,13 @@ Current state:
 
 ## Docs to Update
 
-- [ ] `docs/openapi.yaml` — add `POST /forgot-password` and `POST /reset-password/{token}`
+- [x] `docs/openapi.yaml` — add `POST /forgot-password` and `POST /reset-password/{token}`
       under the `auth` tag
-- [ ] `docs/asyncapi.yaml` — add `PasswordResetRequested` and `PasswordResetCompleted`
+- [x] `docs/asyncapi.yaml` — add `PasswordResetRequested` and `PasswordResetCompleted`
       messages to the `events` channel; add their schemas and payloads to `components`
-- [ ] `auth-service/CLAUDE.md` — document the two new endpoints and the new
+- [x] `auth-service/CLAUDE.md` — document the two new endpoints and the new
       `PasswordResetToken` model
-- [ ] `analytics-service/CLAUDE.md` — add `password_reset_requested` and
+- [x] `analytics-service/CLAUDE.md` — add `password_reset_requested` and
       `password_reset_completed` to the Events Consumed table
 
 ## Tasks

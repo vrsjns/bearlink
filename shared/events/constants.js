@@ -17,6 +17,8 @@ const EVENT_TYPES = Object.freeze({
   URL_UPDATED: 'url_updated',
   URL_DELETED: 'url_deleted',
   URL_CLICKED: 'url_clicked',
+  PASSWORD_RESET_REQUESTED: 'password_reset_requested',
+  PASSWORD_RESET_COMPLETED: 'password_reset_completed',
 });
 
 module.exports = {

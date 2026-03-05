@@ -9,7 +9,12 @@ const getTokenFromCookie = (res: request.Response): string | undefined => {
   return cookie?.split(';')[0].split('=')[1];
 };
 
-import { createMockPrismaClient, mockPrismaUser, resetPrismaMocks } from './mocks/prisma';
+import {
+  createMockPrismaClient,
+  mockPrismaUser,
+  mockPrismaPasswordResetToken,
+  resetPrismaMocks,
+} from './mocks/prisma';
 import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
 
 // Import the REAL app factory - this tests the actual application
@@ -752,6 +757,229 @@ describe('Auth Routes', () => {
       const response = await request(app).get('/csrf-token').expect(401);
 
       expect(response.body.error).toBe('Not authenticated.');
+    });
+  });
+
+  describe('POST /forgot-password', () => {
+    const registeredUser = {
+      id: 42,
+      email: 'user@example.com',
+      name: 'Test User',
+      password: 'hashedPassword',
+      role: 'USER',
+    };
+
+    it('should return 200 with generic message for a registered email', async () => {
+      mockPrismaUser.findUnique.mockResolvedValue(registeredUser);
+      mockPrismaPasswordResetToken.create.mockResolvedValue({});
+
+      const response = await request(app)
+        .post('/forgot-password')
+        .send({ email: 'user@example.com' })
+        .expect(200);
+
+      expect(response.body.message).toMatch(/reset link/i);
+    });
+
+    it('should publish email notification and domain event for a registered email', async () => {
+      mockPrismaUser.findUnique.mockResolvedValue(registeredUser);
+      mockPrismaPasswordResetToken.create.mockResolvedValue({});
+
+      await request(app).post('/forgot-password').send({ email: 'user@example.com' }).expect(200);
+
+      expect(mockEventPublisher.publishEmailNotification).toHaveBeenCalledTimes(1);
+      const emailPayload = mockEventPublisher.publishEmailNotification.mock.calls[0][0];
+      expect(emailPayload.to).toBe('user@example.com');
+      expect(emailPayload.text).toContain('/reset-password/');
+
+      expect(mockEventPublisher.publishPasswordResetRequested).toHaveBeenCalledTimes(1);
+      expect(mockEventPublisher.publishPasswordResetRequested).toHaveBeenCalledWith({ userId: 42 });
+    });
+
+    it('should return 200 with the same generic message for an unregistered email', async () => {
+      mockPrismaUser.findUnique.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post('/forgot-password')
+        .send({ email: 'unknown@example.com' })
+        .expect(200);
+
+      expect(response.body.message).toMatch(/reset link/i);
+    });
+
+    it('should publish no email or domain event for an unregistered email', async () => {
+      mockPrismaUser.findUnique.mockResolvedValue(null);
+
+      await request(app)
+        .post('/forgot-password')
+        .send({ email: 'unknown@example.com' })
+        .expect(200);
+
+      expect(mockEventPublisher.publishEmailNotification).not.toHaveBeenCalled();
+      expect(mockEventPublisher.publishPasswordResetRequested).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 when email is missing', async () => {
+      const response = await request(app).post('/forgot-password').send({}).expect(400);
+
+      expect(response.body).toHaveProperty('error');
+    });
+
+    it('should return 400 for a malformed email', async () => {
+      const response = await request(app)
+        .post('/forgot-password')
+        .send({ email: 'not-an-email' })
+        .expect(400);
+
+      expect(response.body).toHaveProperty('error');
+    });
+
+    it('should not require a CSRF token (unauthenticated endpoint)', async () => {
+      mockPrismaUser.findUnique.mockResolvedValue(null);
+
+      await request(app).post('/forgot-password').send({ email: 'user@example.com' }).expect(200);
+    });
+  });
+
+  describe('POST /reset-password/:token', () => {
+    const validToken = 'a'.repeat(64);
+    const futureDate = new Date(Date.now() + 60 * 60 * 1000);
+
+    const makeResetToken = (overrides = {}) => ({
+      id: 1,
+      token: validToken,
+      userId: 42,
+      expiresAt: futureDate,
+      usedAt: null,
+      user: { id: 42, email: 'user@example.com' },
+      ...overrides,
+    });
+
+    it('should reset password and return 200 for a valid unused unexpired token', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(makeResetToken());
+      mockPrismaUser.update.mockResolvedValue({});
+      mockPrismaPasswordResetToken.update.mockResolvedValue({});
+
+      const response = await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({ password: 'NewPassword1' })
+        .expect(200);
+
+      expect(response.body.message).toMatch(/successful/i);
+    });
+
+    it('should hash the new password before storing', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(makeResetToken());
+      mockPrismaUser.update.mockResolvedValue({});
+      mockPrismaPasswordResetToken.update.mockResolvedValue({});
+
+      await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({ password: 'NewPassword1' })
+        .expect(200);
+
+      const updateCall = mockPrismaUser.update.mock.calls[0][0];
+      const storedHash = updateCall.data.password;
+      expect(storedHash).not.toBe('NewPassword1');
+      const isValid = await bcrypt.compare('NewPassword1', storedHash);
+      expect(isValid).toBe(true);
+    });
+
+    it('should mark the token as used after a successful reset', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(makeResetToken());
+      mockPrismaUser.update.mockResolvedValue({});
+      mockPrismaPasswordResetToken.update.mockResolvedValue({});
+
+      await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({ password: 'NewPassword1' })
+        .expect(200);
+
+      expect(mockPrismaPasswordResetToken.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({ usedAt: expect.any(Date) }),
+        })
+      );
+    });
+
+    it('should publish password_reset_completed event', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(makeResetToken());
+      mockPrismaUser.update.mockResolvedValue({});
+      mockPrismaPasswordResetToken.update.mockResolvedValue({});
+
+      await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({ password: 'NewPassword1' })
+        .expect(200);
+
+      expect(mockEventPublisher.publishPasswordResetCompleted).toHaveBeenCalledWith({ userId: 42 });
+    });
+
+    it('should return 400 for an expired token', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(
+        makeResetToken({ expiresAt: new Date(Date.now() - 1000) })
+      );
+
+      const response = await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({ password: 'NewPassword1' })
+        .expect(400);
+
+      expect(response.body.error).toMatch(/invalid or expired/i);
+    });
+
+    it('should return 400 for an already-used token', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(
+        makeResetToken({ usedAt: new Date() })
+      );
+
+      const response = await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({ password: 'NewPassword1' })
+        .expect(400);
+
+      expect(response.body.error).toMatch(/invalid or expired/i);
+    });
+
+    it('should return 400 for an unknown token', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post(`/reset-password/unknowntoken`)
+        .send({ password: 'NewPassword1' })
+        .expect(400);
+
+      expect(response.body.error).toMatch(/invalid or expired/i);
+    });
+
+    it('should return 400 when password fails strength validation', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(makeResetToken());
+
+      const response = await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({ password: 'weakpassword' })
+        .expect(400);
+
+      expect(response.body.error).toMatch(/password must be/i);
+    });
+
+    it('should return 400 when password is missing', async () => {
+      const response = await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({})
+        .expect(400);
+
+      expect(response.body).toHaveProperty('error');
+    });
+
+    it('should not require a CSRF token (unauthenticated endpoint)', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(null);
+
+      await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({ password: 'NewPassword1' })
+        .expect(400);
     });
   });
 
