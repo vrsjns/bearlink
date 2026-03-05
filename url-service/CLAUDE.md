@@ -23,7 +23,8 @@ url-service/
 │   ├── rateLimiters.js         # createRedisRateLimiters(redisClient) factory
 │   ├── safeBrowsing.service.js # checkUrlSafety(url, apiKey, httpClient?)
 │   ├── domainFilter.service.js # checkDomain(url) — reads DOMAIN_BLOCKLIST/ALLOWLIST env
-│   └── signedUrl.service.js    # signUrl / verifyUrl (HMAC-SHA256)
+│   ├── signedUrl.service.js    # signUrl / verifyUrl (HMAC-SHA256)
+│   └── outboxPoller.js         # createOutboxPoller(prisma, auditServiceUrl, logger) factory
 ├── prisma/
 │   ├── schema.prisma
 │   └── migrations/
@@ -33,7 +34,8 @@ url-service/
 │   ├── urls.routes.test.ts
 │   ├── redirect.routes.test.ts
 │   ├── redis.routes.test.ts
-│   └── security.test.ts
+│   ├── security.test.ts
+│   └── outboxPoller.test.ts
 └── CLAUDE.md
 ```
 
@@ -137,6 +139,47 @@ Uses `url_service` PostgreSQL database with Prisma ORM.
 | `previewImageUrl`    | String?          | Scraped by preview-service (async)            |
 | `previewFetchedAt`   | DateTime?        | When preview metadata was last updated        |
 
+## Audit Outbox
+
+url-service writes an `OutboxEvent` row atomically with every state-changing DB operation.
+A background poller (`outboxPoller.js`) forwards unprocessed rows to audit-service every 5 s.
+
+### OutboxEvent model
+
+| Field         | Type      | Notes                                  |
+| ------------- | --------- | -------------------------------------- |
+| `id`          | Int       | Primary key (autoincrement)            |
+| `eventType`   | String    | e.g. `url_created`, `url_clicked`      |
+| `payload`     | Json      | Event-specific fields (see below)      |
+| `actorId`     | String?   | String form of userId where available  |
+| `processed`   | Boolean   | Default false; set true after delivery |
+| `processedAt` | DateTime? | Timestamp of successful delivery       |
+| `createdAt`   | DateTime  | Auto-set                               |
+
+### Events written
+
+| Event               | Trigger                                   | Transaction type  | Key payload fields                                     |
+| ------------------- | ----------------------------------------- | ----------------- | ------------------------------------------------------ |
+| `url_created`       | POST /urls (single and bulk)              | callback-form     | shortId, userId, originalUrl, customAlias, createdAt   |
+| `url_updated`       | PUT /urls/:id                             | callback-form     | shortId, userId, full updated record (no passwordHash) |
+| `url_deleted`       | DELETE /urls/:id                          | callback-form     | shortId, userId                                        |
+| `url_clicked`       | unique human GET /:shortId or POST unlock | array-form        | shortId, ip (sha256), userAgent, country, referer      |
+| `url_signed`        | POST /urls/:id/sign                       | standalone insert | urlId, shortId, userId, ttl                            |
+| `url_unlock_failed` | POST /:shortId/unlock wrong password      | standalone insert | shortId                                                |
+
+IP addresses are hashed with `crypto.createHash('sha256')` before storage.
+No OutboxEvent is written for bot requests, deduplicated clicks, or 404/410 unlock attempts.
+
+### Poller
+
+`createOutboxPoller({ prisma, auditServiceUrl, logger })` returns `{ start(), stop() }`.
+
+- Polls every 5 s; fetches up to 100 unprocessed rows ordered by `createdAt`.
+- POSTs a batch to `AUDIT_SERVICE_URL/internal/audit-events`.
+- Marks rows `processed = true` only on 2xx response; retries on failure.
+- If `AUDIT_SERVICE_URL` is not set, logs a warning and skips the interval entirely.
+- Stops cleanly on `stop()` call (called in `gracefulShutdown`).
+
 ## Security Features
 
 - **Domain filter:** `DOMAIN_BLOCKLIST` / `DOMAIN_ALLOWLIST` env vars (comma-separated). Checked at URL creation and update. Returns 422 when blocked.
@@ -145,14 +188,15 @@ Uses `url_service` PostgreSQL database with Prisma ORM.
 
 ## Environment Variables
 
-| Variable                | Required | Description                                                       |
-| ----------------------- | -------- | ----------------------------------------------------------------- |
-| `DATABASE_URL`          | Yes      | PostgreSQL connection string                                      |
-| `JWT_SECRET`            | Yes      | Shared JWT signing secret                                         |
-| `RABBITMQ_URL`          | Yes      | RabbitMQ connection URL                                           |
-| `BASE_URL`              | Yes      | Public base URL (e.g. `https://brl.ink`)                          |
-| `REDIS_URL`             | No       | Redis connection string (default: `redis://localhost:6379`)       |
-| `SAFE_BROWSING_API_KEY` | No       | Google Safe Browsing API v4 key                                   |
-| `DOMAIN_BLOCKLIST`      | No       | Comma-separated blocked domains (e.g. `evil.com,bad.org`)         |
-| `DOMAIN_ALLOWLIST`      | No       | Comma-separated allowed domains (takes precedence over blocklist) |
-| `URL_SIGNING_SECRET`    | No       | HMAC secret for signed URLs                                       |
+| Variable                | Required | Description                                                                                           |
+| ----------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`          | Yes      | PostgreSQL connection string                                                                          |
+| `JWT_SECRET`            | Yes      | Shared JWT signing secret                                                                             |
+| `RABBITMQ_URL`          | Yes      | RabbitMQ connection URL                                                                               |
+| `BASE_URL`              | Yes      | Public base URL (e.g. `https://brl.ink`)                                                              |
+| `REDIS_URL`             | No       | Redis connection string (default: `redis://localhost:6379`)                                           |
+| `SAFE_BROWSING_API_KEY` | No       | Google Safe Browsing API v4 key                                                                       |
+| `DOMAIN_BLOCKLIST`      | No       | Comma-separated blocked domains (e.g. `evil.com,bad.org`)                                             |
+| `DOMAIN_ALLOWLIST`      | No       | Comma-separated allowed domains (takes precedence over blocklist)                                     |
+| `URL_SIGNING_SECRET`    | No       | HMAC secret for signed URLs                                                                           |
+| `AUDIT_SERVICE_URL`     | No       | Base URL of audit-service (e.g. `http://audit-service:9000`); outbox poller skips forwarding if unset |

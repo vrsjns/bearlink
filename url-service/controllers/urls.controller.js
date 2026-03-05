@@ -7,6 +7,8 @@ const { checkUrlSafety } = require('../services/safeBrowsing.service');
 const { checkDomain } = require('../services/domainFilter.service');
 const { signUrl } = require('../services/signedUrl.service');
 
+const sanitizePayload = ({ passwordHash, ...rest }) => rest;
+
 const logger = createLogger('url-service');
 
 const VALID_REDIRECT_TYPES = [301, 302];
@@ -195,19 +197,35 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
       if (customAlias) {
         // Custom alias — single attempt; P2002 means the alias is taken
         try {
-          newUrl = await prisma.uRL.create({
-            data: {
-              originalUrl,
-              shortId: generateShortId(),
-              customAlias,
-              userId,
-              redirectType,
-              expiresAt: expiresAtDate,
-              passwordHash,
-              tags,
-              utmParams,
-              requireSignature,
-            },
+          newUrl = await prisma.$transaction(async (tx) => {
+            const url = await tx.uRL.create({
+              data: {
+                originalUrl,
+                shortId: generateShortId(),
+                customAlias,
+                userId,
+                redirectType,
+                expiresAt: expiresAtDate,
+                passwordHash,
+                tags,
+                utmParams,
+                requireSignature,
+              },
+            });
+            await tx.outboxEvent.create({
+              data: {
+                eventType: 'url_created',
+                payload: {
+                  shortId: url.shortId,
+                  userId,
+                  originalUrl,
+                  customAlias,
+                  createdAt: url.createdAt,
+                },
+                actorId: String(userId),
+              },
+            });
+            return url;
           });
         } catch (error) {
           if (error.code === 'P2002') {
@@ -219,18 +237,33 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
         // Auto-generated shortId — retry on collision
         for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
           try {
-            newUrl = await prisma.uRL.create({
-              data: {
-                originalUrl,
-                shortId: generateShortId(),
-                userId,
-                redirectType,
-                expiresAt: expiresAtDate,
-                passwordHash,
-                tags,
-                utmParams,
-                requireSignature,
-              },
+            newUrl = await prisma.$transaction(async (tx) => {
+              const url = await tx.uRL.create({
+                data: {
+                  originalUrl,
+                  shortId: generateShortId(),
+                  userId,
+                  redirectType,
+                  expiresAt: expiresAtDate,
+                  passwordHash,
+                  tags,
+                  utmParams,
+                  requireSignature,
+                },
+              });
+              await tx.outboxEvent.create({
+                data: {
+                  eventType: 'url_created',
+                  payload: {
+                    shortId: url.shortId,
+                    userId,
+                    originalUrl,
+                    createdAt: url.createdAt,
+                  },
+                  actorId: String(userId),
+                },
+              });
+              return url;
             });
             break;
           } catch (error) {
@@ -333,18 +366,34 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
 
           if (customAlias) {
             try {
-              newUrl = await prisma.uRL.create({
-                data: {
-                  originalUrl,
-                  shortId: generateShortId(),
-                  customAlias,
-                  userId,
-                  redirectType,
-                  expiresAt: expiresAtDate,
-                  passwordHash,
-                  tags,
-                  utmParams,
-                },
+              newUrl = await prisma.$transaction(async (tx) => {
+                const url = await tx.uRL.create({
+                  data: {
+                    originalUrl,
+                    shortId: generateShortId(),
+                    customAlias,
+                    userId,
+                    redirectType,
+                    expiresAt: expiresAtDate,
+                    passwordHash,
+                    tags,
+                    utmParams,
+                  },
+                });
+                await tx.outboxEvent.create({
+                  data: {
+                    eventType: 'url_created',
+                    payload: {
+                      shortId: url.shortId,
+                      userId,
+                      originalUrl,
+                      customAlias,
+                      createdAt: url.createdAt,
+                    },
+                    actorId: String(userId),
+                  },
+                });
+                return url;
               });
             } catch (err) {
               if (err.code === 'P2002') return { error: 'Custom alias is already taken.' };
@@ -353,17 +402,32 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
           } else {
             for (let attempt = 0; attempt < MAX_SHORTID_RETRIES; attempt++) {
               try {
-                newUrl = await prisma.uRL.create({
-                  data: {
-                    originalUrl,
-                    shortId: generateShortId(),
-                    userId,
-                    redirectType,
-                    expiresAt: expiresAtDate,
-                    passwordHash,
-                    tags,
-                    utmParams,
-                  },
+                newUrl = await prisma.$transaction(async (tx) => {
+                  const url = await tx.uRL.create({
+                    data: {
+                      originalUrl,
+                      shortId: generateShortId(),
+                      userId,
+                      redirectType,
+                      expiresAt: expiresAtDate,
+                      passwordHash,
+                      tags,
+                      utmParams,
+                    },
+                  });
+                  await tx.outboxEvent.create({
+                    data: {
+                      eventType: 'url_created',
+                      payload: {
+                        shortId: url.shortId,
+                        userId,
+                        originalUrl,
+                        createdAt: url.createdAt,
+                      },
+                      actorId: String(userId),
+                    },
+                  });
+                  return url;
                 });
                 break;
               } catch (err) {
@@ -467,7 +531,17 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     if (requireSignature !== undefined) data.requireSignature = requireSignature;
 
     try {
-      const updatedUrl = await prisma.uRL.update({ where: { userId, id: urlId }, data });
+      const updatedUrl = await prisma.$transaction(async (tx) => {
+        const url = await tx.uRL.update({ where: { userId, id: urlId }, data });
+        await tx.outboxEvent.create({
+          data: {
+            eventType: 'url_updated',
+            payload: sanitizePayload({ shortId: url.shortId, userId, ...url }),
+            actorId: String(userId),
+          },
+        });
+        return url;
+      });
       await invalidateUrlCache(redis, updatedUrl);
       eventPublisher.publishUrlUpdated(sanitizeForEvent(updatedUrl));
       res.json(updatedUrl);
@@ -497,7 +571,17 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     }
 
     try {
-      const deletedUrl = await prisma.uRL.delete({ where: { id: urlId, userId } });
+      const deletedUrl = await prisma.$transaction(async (tx) => {
+        const url = await tx.uRL.delete({ where: { id: urlId, userId } });
+        await tx.outboxEvent.create({
+          data: {
+            eventType: 'url_deleted',
+            payload: { shortId: url.shortId, userId },
+            actorId: String(userId),
+          },
+        });
+        return url;
+      });
       await invalidateUrlCache(redis, deletedUrl);
       eventPublisher.publishUrlDeleted(sanitizeForEvent(deletedUrl));
       res.sendStatus(204);
@@ -534,6 +618,18 @@ const createUrlsController = ({ prisma, eventPublisher, baseUrl, publishPreviewJ
     const shortUrl = `${baseUrl}/${slug}`;
     const ttlSeconds = Number.isInteger(ttl) && ttl > 0 ? ttl : undefined;
     const signed = signUrl(shortUrl, secret, ttlSeconds);
+
+    try {
+      await prisma.outboxEvent.create({
+        data: {
+          eventType: 'url_signed',
+          payload: { urlId, shortId: url.shortId, userId, ttl: ttlSeconds ?? null },
+          actorId: String(userId),
+        },
+      });
+    } catch (err) {
+      logger.error('Outbox insert failed for url_signed', { error: err.message });
+    }
 
     res.json({ signedUrl: signed });
   };
