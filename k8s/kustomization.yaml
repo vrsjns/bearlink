@@ -28,6 +28,8 @@ resources:
   - observability/promtail-configmap.yaml
   - observability/promtail.yaml
   - observability/grafana.yaml
+  - audit-service/deployment.yaml
+  - audit-service/service.yaml
   - ingress.yaml
 
 # Single place to change the image registry owner.
@@ -46,3 +48,5 @@ images:
     newName: ghcr.io/vrsjns/preview-service
   - name: web-ui
     newName: ghcr.io/vrsjns/web-ui
+  - name: audit-service
+    newName: ghcr.io/vrsjns/audit-service
