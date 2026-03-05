@@ -22,7 +22,7 @@ src/
     login/         - Login page
     register/      - Register page
     profile/       - Profile + password tabs
-    manage/        - URL table with edit/delete
+    manage/        - URL table with pagination, search, tag/expired filters, QR download, modal edit
     forgot-password/
     reset-password/
   components/
@@ -34,7 +34,8 @@ src/
     utils.ts       - cn() helper (clsx + tailwind-merge)
   services/api/
     auth.ts        - Auth service API calls
-    url.ts         - URL service API calls
+    url.ts         - URL service API calls (createURL, updateURL accept full options objects;
+                     getURLs accepts pagination/filter params; downloadQR returns Blob)
     analytics.ts   - Analytics service API calls
 ```
 
