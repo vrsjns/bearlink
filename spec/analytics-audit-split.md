@@ -1,6 +1,6 @@
 # analytics-service Audit Split
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** analytics-service
 > **Priority:** medium
 

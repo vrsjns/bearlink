@@ -1,6 +1,6 @@
 # audit-service
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** audit-service (new)
 > **Priority:** high
 

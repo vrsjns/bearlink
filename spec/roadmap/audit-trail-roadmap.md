@@ -3,7 +3,7 @@
 Breaking the reliable audit trail initiative into 4 independently-shippable parts.
 The outbox pattern replaces the dual-write gap in the current RabbitMQ-based audit path.
 
-> **Status: draft**
+> **Status: approved**
 
 ---
 
@@ -43,10 +43,28 @@ Part 4 (analytics-service split) <-- needs Part 3 live before removing /events
 
 > Spec: `spec/auth-service-outbox.md`
 
-Add an `OutboxEvent` table to the auth-service database. Wrap the `user_registered`
-write and the outbox write in a single Prisma transaction. A background poller reads
+Add an `OutboxEvent` table to the auth-service database. Wrap each auditable business
+operation and its outbox write in a single Prisma transaction. A background poller reads
 unprocessed rows and forwards them to the audit-service with retry logic. The existing
 RabbitMQ publish for analytics is unchanged.
+
+auth-service produces the following auditable events:
+
+| Event                      | Trigger                                       | Priority  |
+| -------------------------- | --------------------------------------------- | --------- |
+| `user_registered`          | POST /register                                | must-have |
+| `user_login`               | POST /login (success)                         | must-have |
+| `user_login_failed`        | POST /login (wrong credentials)               | should    |
+| `user_password_changed`    | POST /users/:id/password                      | must-have |
+| `user_profile_updated`     | PUT /users/:id (name or email change)         | must-have |
+| `user_deleted`             | DELETE /users/:id (admin only)                | must-have |
+| `password_reset_requested` | POST /forgot-password (registered email only) | must-have |
+| `password_reset_completed` | POST /reset-password/:token (success)         | must-have |
+
+`user_login` and `user_login_failed` have no corresponding DB write to wrap in a
+transaction, so the outbox row is inserted as a standalone write. `user_login_failed`
+identifies the actor only by email (which may not resolve to a userId if the email is
+unregistered).
 
 **Schema change:** one new Prisma model (`OutboxEvent`) in auth-service.
 **No new infrastructure.**
@@ -57,9 +75,20 @@ RabbitMQ publish for analytics is unchanged.
 
 > Spec: `spec/url-service-outbox.md`
 
-Same outbox pattern applied to url-service for all auditable operations: url_created,
-url_updated, url_deleted, url_clicked. Wraps each controller write + outbox write in a
-Prisma transaction. Background poller forwards to audit-service.
+Same outbox pattern applied to url-service for all auditable operations:
+
+| Event               | Trigger                                                   | Priority  |
+| ------------------- | --------------------------------------------------------- | --------- |
+| `url_created`       | POST /urls (and each item in POST /urls/bulk)             | must-have |
+| `url_updated`       | PUT /urls/:id                                             | must-have |
+| `url_deleted`       | DELETE /urls/:id                                          | must-have |
+| `url_clicked`       | GET /:shortId and POST /:shortId/unlock (unique, non-bot) | must-have |
+| `url_signed`        | POST /urls/:id/sign                                       | should    |
+| `url_unlock_failed` | POST /:shortId/unlock (wrong password)                    | could     |
+
+`url_signed` and `url_unlock_failed` have no corresponding DB write; the outbox row is a
+standalone insert. `url_signed` is security-relevant because it produces a shareable
+time-limited link that bypasses normal access controls.
 
 **Schema change:** one new Prisma model (`OutboxEvent`) in url-service.
 **No new infrastructure.**

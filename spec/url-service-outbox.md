@@ -1,6 +1,6 @@
 # url-service Outbox Integration
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** url-service
 > **Priority:** high
 
@@ -14,14 +14,32 @@ with the business operation.
 
 ## Background
 
-url-service is the highest-volume source of auditable events: url_created, url_updated,
-url_deleted, and url_clicked. url_clicked in particular fires on every redirect and may
-be high-frequency. The outbox pattern is the same as in auth-service-outbox.md but
-applied to four event types and a service with more concurrent traffic.
+url-service is the highest-volume source of auditable events. The outbox pattern is the
+same as in auth-service-outbox.md but applied to a service with more concurrent traffic.
+
+Must-have events (state changes):
+
+- `url_created` -- new short URL created (POST /urls; also fires per-item in bulk)
+- `url_updated` -- short URL record modified (PUT /urls/:id)
+- `url_deleted` -- short URL removed (DELETE /urls/:id)
+- `url_clicked` -- unique human redirect (GET /:shortId and POST /:shortId/unlock)
+
+Should-have event:
+
+- `url_signed` -- a time-limited signed link generated (POST /urls/:id/sign); security
+  relevant because the resulting URL bypasses the normal requireSignature gate for
+  the duration of the TTL, making it a privileged operation worth auditing
+
+Could-have event:
+
+- `url_unlock_failed` -- wrong password submitted to POST /:shortId/unlock; enables
+  retrospective brute-force detection on password-protected links
+
+`url_signed` and `url_unlock_failed` have no corresponding DB write; the outbox row is a
+standalone insert in those handlers.
 
 The existing RabbitMQ publish path (used by analytics-service for metrics) is left
-untouched. The outbox is a parallel, guaranteed-delivery audit path — not a replacement
-for the existing event flow.
+untouched. The outbox is a parallel, guaranteed-delivery audit path.
 
 ## Requirements
 
@@ -65,6 +83,15 @@ for the existing event flow.
 
 - **R10:** The poller shall stop cleanly on SIGTERM/SIGINT.
 
+- **R10a:** The `signUrlEndpoint` handler shall insert a standalone OutboxEvent row with
+  eventType `url_signed` after successfully generating a signed URL. The payload shall
+  include: `urlId`, `shortId`, `userId`, `ttl` (seconds, null if no expiry set).
+
+- **R10b:** The `unlock` handler shall insert a standalone OutboxEvent row with eventType
+  `url_unlock_failed` when a bcrypt comparison returns false (wrong password). The payload
+  shall include: `shortId`. No OutboxEvent is written for 404 (URL not found) or 410
+  (expired) responses, as those are not access attempts against a live protected resource.
+
 ### Non-Functional
 
 - **R11:** The poller shall not add measurable latency to the redirect path. The outbox
@@ -89,6 +116,13 @@ for the existing event flow.
 - [ ] Given a redirect that is deduplicated (Redis SET NX returns false), no OutboxEvent
       row is written.
 
+- [ ] Given a successful POST /urls/:id/sign, an OutboxEvent row with eventType
+      `url_signed` exists containing urlId, shortId, userId, and ttl.
+
+- [ ] Given a POST /:shortId/unlock with an incorrect password, an OutboxEvent row with
+      eventType `url_unlock_failed` exists containing the shortId. No row is written when
+      the URL does not exist (404) or has expired (410).
+
 - [ ] Given the audit-service is reachable, all unprocessed rows are forwarded and marked
       processed within one poll cycle (5 seconds).
 
@@ -109,8 +143,11 @@ for the existing event flow.
   wrapper does not need separate treatment).
 - Cleanup of processed outbox rows.
 - Encryption or signing of the outbox payload.
-- url_clicked events for password-protected or signed-URL verification failures
-  (these are not counted as clicks today).
+- `url_clicked` events for expired-link, signature-failure, or missing-password
+  responses -- these are not counted as clicks today and carry no actor identity.
+- Safe Browsing or domain-filter rejections -- these are input validation errors at
+  create/update time, not state changes; they belong in security logs, not the audit
+  trail.
 
 ## Docs to Update
 
