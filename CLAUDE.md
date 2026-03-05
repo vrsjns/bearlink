@@ -153,6 +153,34 @@ of truth for planned and active work.
 
 **Definition of done:** all acceptance criteria pass, `docs/openapi.yaml` and/or `docs/asyncapi.yaml` are updated to reflect new or changed endpoints and events, and the spec status is set to `done`.
 
+## Architecture Decision Records
+
+Significant architectural choices are documented as ADRs in `docs/adr/`.
+
+- `docs/adr/README.md` — what ADRs are, when to write one, the format, the lifecycle
+- `docs/adr/_template.md` — copy this to create a new ADR
+- `docs/adr/NNN-title.md` — one file per decision, numbered sequentially
+
+**When to write an ADR (before or alongside the spec):**
+
+- A spec introduces a new service, splits an existing one, or adds new infrastructure
+- A spec establishes a pattern other services will follow
+- Two or more meaningfully different implementation approaches were evaluated
+- The chosen approach has tradeoffs that would surprise a future engineer
+
+**When not to write an ADR:** single-service features, implementation details,
+configuration choices, anything easily reversible without cross-service impact.
+
+**Rule:** check `docs/adr/` before recommending an architectural approach — the
+decision may already be documented. If proposing something that contradicts an existing
+ADR, flag it explicitly rather than silently overriding it.
+
+**Common prompts:**
+
+- "Help me write an ADR for [decision]"
+- "Does this spec need an ADR?"
+- "Review docs/adr/NNN-title.md for gaps"
+
 ## Key Patterns
 
 - All backend services use Express + Prisma ORM

@@ -1,9 +1,16 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const geoip = require('geoip-lite');
 const QRCode = require('qrcode');
 const { createLogger } = require('shared/utils/logger');
 const { isSafeRedirectUrl } = require('shared/utils/validation');
 const { verifyUrl, SIG_PARAM, EXP_PARAM } = require('../services/signedUrl.service');
+
+const hashIp = (ip) =>
+  crypto
+    .createHash('sha256')
+    .update(ip || '')
+    .digest('hex');
 
 const logger = createLogger('url-service');
 
@@ -252,10 +259,24 @@ const createRedirectController = ({ prisma, eventPublisher, baseUrl, redis }) =>
         const unique = await isUniqueClick(redis, url.shortId, ip);
 
         if (unique) {
-          await prisma.uRL.update({
-            where: { shortId: url.shortId },
-            data: { clicks: { increment: 1 } },
-          });
+          await prisma.$transaction([
+            prisma.uRL.update({
+              where: { shortId: url.shortId },
+              data: { clicks: { increment: 1 } },
+            }),
+            prisma.outboxEvent.create({
+              data: {
+                eventType: 'url_clicked',
+                payload: {
+                  shortId: url.shortId,
+                  ip: hashIp(ip),
+                  userAgent,
+                  country,
+                  referer,
+                },
+              },
+            }),
+          ]);
 
           eventPublisher.publishUrlClicked({
             shortId: url.shortId,
@@ -308,17 +329,41 @@ const createRedirectController = ({ prisma, eventPublisher, baseUrl, redis }) =>
 
       const isValid = await bcrypt.compare(password, url.passwordHash);
       if (!isValid) {
+        try {
+          await prisma.outboxEvent.create({
+            data: {
+              eventType: 'url_unlock_failed',
+              payload: { shortId: url.shortId },
+            },
+          });
+        } catch (err) {
+          logger.error('Outbox insert failed for url_unlock_failed', { error: err.message });
+        }
         return res.status(401).json({ error: 'Incorrect password.' });
       }
 
       const destination = buildRedirectUrl(url.originalUrl, url.utmParams);
 
-      const { userAgent, referer, country } = extractClickMetadata(req);
+      const { userAgent, referer, country, ip } = extractClickMetadata(req);
 
-      await prisma.uRL.update({
-        where: { shortId: url.shortId },
-        data: { clicks: { increment: 1 } },
-      });
+      await prisma.$transaction([
+        prisma.uRL.update({
+          where: { shortId: url.shortId },
+          data: { clicks: { increment: 1 } },
+        }),
+        prisma.outboxEvent.create({
+          data: {
+            eventType: 'url_clicked',
+            payload: {
+              shortId: url.shortId,
+              ip: hashIp(ip),
+              userAgent,
+              country,
+              referer,
+            },
+          },
+        }),
+      ]);
 
       eventPublisher.publishUrlClicked({
         shortId: url.shortId,

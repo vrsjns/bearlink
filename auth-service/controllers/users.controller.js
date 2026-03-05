@@ -11,12 +11,6 @@ const { generateToken, sanitizeUser } = require('../services/token.service');
 
 const logger = createLogger('auth-service');
 
-/**
- * Create users controller with dependencies
- * @param {Object} deps - Dependencies
- * @param {Object} deps.prisma - Prisma client
- * @returns {Object} Controller methods
- */
 const createUsersController = ({ prisma }) => {
   const listUsers = async (req, res) => {
     const users = await prisma.user.findMany();
@@ -42,10 +36,8 @@ const createUsersController = ({ prisma }) => {
         return res.status(404).json({ error: 'User not found.' });
       }
 
-      // Build update data with explicit whitelist (no mass assignment)
       const updateData = {};
 
-      // Validate and set name if provided
       if (name !== undefined) {
         if (!isValidName(name)) {
           return validationError(res, 'Name must be 1-100 characters');
@@ -53,13 +45,11 @@ const createUsersController = ({ prisma }) => {
         updateData.name = name.trim();
       }
 
-      // Validate and set email if provided
       if (email !== undefined && email !== user.email) {
         if (!isValidEmail(email)) {
           return validationError(res, 'Invalid email format');
         }
 
-        // Email change requires password verification
         if (!currentPassword) {
           return res.status(403).json({ error: 'Current password required to change email.' });
         }
@@ -69,7 +59,6 @@ const createUsersController = ({ prisma }) => {
           return res.status(403).json({ error: 'Invalid current password.' });
         }
 
-        // Check email uniqueness
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
           return res.status(409).json({ error: 'Email already in use.' });
@@ -78,19 +67,28 @@ const createUsersController = ({ prisma }) => {
         updateData.email = email;
       }
 
-      // Only update if there are changes
       if (Object.keys(updateData).length === 0) {
         return res.json({ user: sanitizeUser(user) });
       }
 
-      const updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: updateData,
-      });
+      const changedFields = Object.keys(updateData);
 
-      logger.info('User profile updated', { userId, fields: Object.keys(updateData) });
+      const [updatedUser] = await prisma.$transaction([
+        prisma.user.update({
+          where: { id: userId },
+          data: updateData,
+        }),
+        prisma.outboxEvent.create({
+          data: {
+            eventType: 'user_profile_updated',
+            payload: { userId, changedFields },
+            actorId: String(userId),
+          },
+        }),
+      ]);
 
-      // Return new token since name/email might be in token payload
+      logger.info('User profile updated', { userId, fields: changedFields });
+
       res.json({
         user: sanitizeUser(updatedUser),
         token: generateToken(updatedUser),
@@ -114,7 +112,17 @@ const createUsersController = ({ prisma }) => {
         return res.status(404).json({ error: 'User not found.' });
       }
 
-      await prisma.user.delete({ where: { id: userId } });
+      await prisma.$transaction([
+        prisma.user.delete({ where: { id: userId } }),
+        prisma.outboxEvent.create({
+          data: {
+            eventType: 'user_deleted',
+            payload: { deletedUserId: userId, byUserId: req.user.id },
+            actorId: String(req.user.id),
+          },
+        }),
+      ]);
+
       logger.info('User deleted', { deletedUserId: userId, byUserId: req.user.id });
       res.sendStatus(204);
     } catch (error) {
@@ -140,7 +148,6 @@ const createUsersController = ({ prisma }) => {
     const userId = parseInt(req.params.userId);
     const { currentPassword, newPassword } = req.body;
 
-    // Validate required fields
     const { isValid, missing } = validateRequiredFields(req.body, [
       'currentPassword',
       'newPassword',
@@ -155,13 +162,11 @@ const createUsersController = ({ prisma }) => {
         return res.status(404).json({ error: 'User not found.' });
       }
 
-      // Verify current password
       const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
       if (!isPasswordValid) {
         return res.status(403).json({ error: 'Invalid current password.' });
       }
 
-      // Validate new password strength
       if (!isValidPassword(newPassword)) {
         return validationError(
           res,
@@ -169,17 +174,26 @@ const createUsersController = ({ prisma }) => {
         );
       }
 
-      // Prevent reusing the same password
       const isSamePassword = await bcrypt.compare(newPassword, user.password);
       if (isSamePassword) {
         return validationError(res, 'New password must be different from current password');
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      await prisma.user.update({
-        where: { id: userId },
-        data: { password: hashedPassword },
-      });
+
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: userId },
+          data: { password: hashedPassword },
+        }),
+        prisma.outboxEvent.create({
+          data: {
+            eventType: 'user_password_changed',
+            payload: { userId },
+            actorId: String(userId),
+          },
+        }),
+      ]);
 
       logger.info('User password changed', { userId });
       res.json({ message: 'Password changed successfully.' });

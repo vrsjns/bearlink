@@ -4,7 +4,12 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-import { createMockPrismaClient, mockPrismaUser, resetPrismaMocks } from './mocks/prisma';
+import {
+  createMockPrismaClient,
+  mockPrismaUser,
+  mockPrismaOutboxEvent,
+  resetPrismaMocks,
+} from './mocks/prisma';
 import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
 
 // Import the REAL app factory - this tests the actual application
@@ -509,6 +514,49 @@ describe('Users Routes', () => {
         expect(response.body.error).toBe('Failed to update profile.');
       });
     });
+
+    describe('outbox events', () => {
+      it('should create user_profile_updated outbox event when a field changes', async () => {
+        const token = generateTestToken(regularUser);
+        const dbUser = { ...regularUser, password: 'hashedPassword' };
+        const updatedUser = { ...dbUser, name: 'New Name' };
+
+        mockPrismaUser.findUnique.mockResolvedValue(dbUser);
+        mockPrismaUser.update.mockResolvedValue(updatedUser);
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+        await request(app)
+          .put(`/users/${regularUser.id}`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({ name: 'New Name' })
+          .expect(200);
+
+        expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            eventType: 'user_profile_updated',
+            payload: expect.objectContaining({
+              userId: regularUser.id,
+              changedFields: ['name'],
+            }),
+          }),
+        });
+      });
+
+      it('should not create outbox event for a no-op profile update', async () => {
+        const token = generateTestToken(regularUser);
+        const dbUser = { ...regularUser, password: 'hashedPassword' };
+
+        mockPrismaUser.findUnique.mockResolvedValue(dbUser);
+
+        await request(app)
+          .put(`/users/${regularUser.id}`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({})
+          .expect(200);
+
+        expect(mockPrismaOutboxEvent.create).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('DELETE /users/:userId', () => {
@@ -590,6 +638,27 @@ describe('Users Routes', () => {
           .expect(500);
 
         expect(response.body.error).toBe('Failed to delete user.');
+      });
+    });
+
+    describe('outbox events', () => {
+      it('should create user_deleted outbox event on successful deletion', async () => {
+        const token = generateTestToken(adminUser);
+        mockPrismaUser.findUnique.mockResolvedValue({ ...regularUser, password: 'hash' });
+        mockPrismaUser.delete.mockResolvedValue({ ...regularUser });
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+        await request(app)
+          .delete(`/users/${regularUser.id}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(204);
+
+        expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            eventType: 'user_deleted',
+            payload: { deletedUserId: regularUser.id, byUserId: adminUser.id },
+          }),
+        });
       });
     });
   });
@@ -800,6 +869,31 @@ describe('Users Routes', () => {
           .expect(500);
 
         expect(response.body.error).toBe('Failed to change password.');
+      });
+    });
+
+    describe('outbox events', () => {
+      it('should create user_password_changed outbox event on success', async () => {
+        const token = generateTestToken(regularUser);
+        const hashedCurrent = await bcrypt.hash('OldPassword1', 10);
+        const dbUser = { ...regularUser, password: hashedCurrent };
+
+        mockPrismaUser.findUnique.mockResolvedValue(dbUser);
+        mockPrismaUser.update.mockResolvedValue({ ...dbUser });
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+        await request(app)
+          .post(`/users/${regularUser.id}/password`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({ currentPassword: 'OldPassword1', newPassword: 'NewPassword1' })
+          .expect(200);
+
+        expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            eventType: 'user_password_changed',
+            payload: { userId: regularUser.id },
+          }),
+        });
       });
     });
   });

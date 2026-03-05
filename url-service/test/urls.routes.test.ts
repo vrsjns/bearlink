@@ -3,7 +3,12 @@ import request from 'supertest';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 
-import { createMockPrismaClient, mockPrismaURL, resetPrismaMocks } from './mocks/prisma';
+import {
+  createMockPrismaClient,
+  mockPrismaURL,
+  mockPrismaOutboxEvent,
+  resetPrismaMocks,
+} from './mocks/prisma';
 import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
 
 // Import the REAL app factory
@@ -1032,6 +1037,72 @@ describe('URLs Routes', () => {
           .expect(200);
 
         expect(mockPrismaURL.update.mock.calls[0][0].data.utmParams).toBeNull();
+      });
+    });
+  });
+
+  // ─── Outbox events ────────────────────────────────────────────────────────
+
+  describe('Outbox events', () => {
+    beforeEach(() => {
+      mockPrismaOutboxEvent.create.mockResolvedValue({});
+    });
+
+    it('should create url_created outbox event on POST /urls', async () => {
+      const token = generateTestToken(regularUser);
+      mockPrismaURL.create.mockImplementation((args: any) =>
+        Promise.resolve(makeUrl({ shortId: args.data.shortId }))
+      );
+
+      await request(app)
+        .post('/urls')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ originalUrl: 'https://example.com' })
+        .expect(200);
+
+      expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          eventType: 'url_created',
+          payload: expect.objectContaining({
+            userId: regularUser.id,
+            originalUrl: 'https://example.com',
+          }),
+        }),
+      });
+    });
+
+    it('should create url_updated outbox event on PUT /urls/:id', async () => {
+      const token = generateTestToken(regularUser);
+      mockPrismaURL.update.mockResolvedValue(makeUrl({ originalUrl: 'https://updated.com' }));
+
+      await request(app)
+        .put('/urls/1')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ originalUrl: 'https://updated.com' })
+        .expect(200);
+
+      expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          eventType: 'url_updated',
+          payload: expect.objectContaining({ userId: regularUser.id }),
+        }),
+      });
+    });
+
+    it('should create url_deleted outbox event on DELETE /urls/:id', async () => {
+      const token = generateTestToken(regularUser);
+      mockPrismaURL.delete.mockResolvedValue(makeUrl());
+
+      await request(app).delete('/urls/1').set('Authorization', `Bearer ${token}`).expect(204);
+
+      expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          eventType: 'url_deleted',
+          payload: expect.objectContaining({
+            shortId: 'abc1234567',
+            userId: regularUser.id,
+          }),
+        }),
       });
     });
   });

@@ -3,7 +3,12 @@ import request from 'supertest';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 
-import { createMockPrismaClient, mockPrismaURL, resetPrismaMocks } from './mocks/prisma';
+import {
+  createMockPrismaClient,
+  mockPrismaURL,
+  mockPrismaOutboxEvent,
+  resetPrismaMocks,
+} from './mocks/prisma';
 import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
 
 // Import the REAL app factory
@@ -552,6 +557,79 @@ describe('Redirect Routes', () => {
 
         expect(response.body.error).toBe('Failed to unlock');
       });
+    });
+  });
+
+  // ─── Outbox events ────────────────────────────────────────────────────────
+
+  describe('Outbox events', () => {
+    beforeEach(() => {
+      mockPrismaOutboxEvent.create.mockResolvedValue({});
+      mockPrismaURL.update.mockResolvedValue({ clicks: 1 });
+    });
+
+    it('should create url_clicked outbox event on unique human redirect', async () => {
+      const url = makeUrl();
+      mockPrismaURL.findFirst.mockResolvedValue(url);
+
+      await request(app)
+        .get('/abc1234567')
+        .set('User-Agent', 'Mozilla/5.0 (human browser)')
+        .expect(302);
+
+      expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          eventType: 'url_clicked',
+          payload: expect.objectContaining({ shortId: 'abc1234567' }),
+        }),
+      });
+    });
+
+    it('should not create outbox event on bot redirect', async () => {
+      const url = makeUrl();
+      mockPrismaURL.findFirst.mockResolvedValue(url);
+
+      await request(app).get('/abc1234567').set('User-Agent', 'Googlebot/2.1').expect(302);
+
+      expect(mockPrismaOutboxEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('should create url_unlock_failed outbox event on wrong password', async () => {
+      const hashedPassword = await bcrypt.hash('correct-password', 1);
+      const url = makeUrl({ passwordHash: hashedPassword });
+      mockPrismaURL.findFirst.mockResolvedValue(url);
+
+      await request(app)
+        .post('/abc1234567/unlock')
+        .send({ password: 'wrong-password' })
+        .expect(401);
+
+      expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          eventType: 'url_unlock_failed',
+          payload: { shortId: 'abc1234567' },
+        }),
+      });
+    });
+
+    it('should not create outbox event on unlock 404', async () => {
+      mockPrismaURL.findFirst.mockResolvedValue(null);
+
+      await request(app).post('/nonexistent/unlock').send({ password: 'any' }).expect(404);
+
+      expect(mockPrismaOutboxEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('should not create outbox event on unlock 410 (expired)', async () => {
+      const url = makeUrl({
+        passwordHash: 'some-hash',
+        expiresAt: new Date(Date.now() - 1000),
+      });
+      mockPrismaURL.findFirst.mockResolvedValue(url);
+
+      await request(app).post('/abc1234567/unlock').send({ password: 'any' }).expect(410);
+
+      expect(mockPrismaOutboxEvent.create).not.toHaveBeenCalled();
     });
   });
 });

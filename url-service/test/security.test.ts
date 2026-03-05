@@ -11,7 +11,12 @@ import request from 'supertest';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 
-import { createMockPrismaClient, mockPrismaURL, resetPrismaMocks } from './mocks/prisma';
+import {
+  createMockPrismaClient,
+  mockPrismaURL,
+  mockPrismaOutboxEvent,
+  resetPrismaMocks,
+} from './mocks/prisma';
 import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
 import { createApp } from '../app';
 
@@ -469,6 +474,7 @@ describe('POST /urls/:id/sign', () => {
   it('respects a custom ttl in the request body', async () => {
     const token = generateToken();
     mockPrismaURL.findFirst.mockResolvedValue(makeUrl());
+    mockPrismaOutboxEvent.create.mockResolvedValue({});
 
     const response = await request(app)
       .post('/urls/1/sign')
@@ -482,5 +488,28 @@ describe('POST /urls/:id/sign', () => {
     // exp should be roughly now + 7200
     expect(exp).toBeGreaterThan(now + 7100);
     expect(exp).toBeLessThan(now + 7300);
+  });
+
+  it('should create url_signed outbox event on success', async () => {
+    const token = generateToken();
+    mockPrismaURL.findFirst.mockResolvedValue(makeUrl());
+    mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+    await request(app)
+      .post('/urls/1/sign')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ttl: 3600 })
+      .expect(200);
+
+    expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        eventType: 'url_signed',
+        payload: expect.objectContaining({
+          urlId: 1,
+          shortId: 'abc1234567',
+          ttl: 3600,
+        }),
+      }),
+    });
   });
 });
