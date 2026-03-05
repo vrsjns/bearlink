@@ -2,6 +2,7 @@
 CREATE DATABASE auth_service;
 CREATE DATABASE url_service;
 CREATE DATABASE analytics_service;
+CREATE DATABASE audit_service;
 
 -- Create roles
 CREATE ROLE auth_service_role WITH LOGIN PASSWORD 'auth_service_password';
