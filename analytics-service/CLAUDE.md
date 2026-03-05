@@ -12,10 +12,8 @@ analytics-service/
 +-- app.js                      # Express app factory: middleware setup, route mounting
 +-- routes/
 |   +-- index.js                # Combine routers, export single router factory
-|   +-- events.routes.js        # GET /events (authenticated, paginated, filtered)
 |   \-- analytics.routes.js     # GET /analytics/* endpoints
 +-- controllers/
-|   +-- events.controller.js    # listEvents handler
 |   \-- analytics.controller.js # getUrlClicks, getSummary, getTopUrls handlers
 +-- services/
 |   +-- event.service.js        # createEventHandler for RabbitMQ consumption + payload validation
@@ -37,7 +35,6 @@ const app = createApp({ prisma });
 
 // Routes receive dependencies and pass to controllers
 const createRoutes = ({ prisma }) => {
-  router.use(createEventsRoutes({ prisma }));
   router.use(createAnalyticsRoutes({ prisma }));
   return router;
 };
@@ -79,25 +76,11 @@ await consumeEvents(channel, handleEvent, { serviceName: 'analytics-service' });
 
 All endpoints require JWT authentication (Bearer token or httpOnly cookie).
 
-| Method | Path                            | Auth       | Description                                     |
-| ------ | ------------------------------- | ---------- | ----------------------------------------------- |
-| GET    | /events                         | Any user   | Paginated event list; users see own events only |
-| GET    | /analytics/urls/:shortId/clicks | Any user   | Total and today's click count for a URL         |
-| GET    | /analytics/summary              | Admin only | Platform totals: users, URLs, clicks            |
-| GET    | /analytics/top-urls             | Admin only | Top N URLs by click count for a time period     |
-
-### GET /events query parameters
-
-| Param    | Default | Notes                                   |
-| -------- | ------- | --------------------------------------- |
-| `page`   | 1       | Min 1                                   |
-| `limit`  | 50      | Max 100                                 |
-| `type`   | -       | Filter by event type                    |
-| `from`   | -       | ISO date lower bound on `createdAt`     |
-| `to`     | -       | ISO date upper bound on `createdAt`     |
-| `userId` | -       | Admin only — filter by `payload.userId` |
-
-Response shape: `{ data: Event[], pagination: { page, limit, total } }`
+| Method | Path                            | Auth       | Description                                 |
+| ------ | ------------------------------- | ---------- | ------------------------------------------- |
+| GET    | /analytics/urls/:shortId/clicks | Any user   | Total and today's click count for a URL     |
+| GET    | /analytics/summary              | Admin only | Platform totals: users, URLs, clicks        |
+| GET    | /analytics/top-urls             | Admin only | Top N URLs by click count for a time period |
 
 ### GET /analytics/top-urls query parameters
 
