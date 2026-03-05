@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const ResetPassword = () => {
   const [password, setPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const { token } = useParams();
   const router = useRouter();
@@ -18,6 +19,12 @@ const ResetPassword = () => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
     try {
       await resetPassword(String(token), password);
       router.push('/login');
@@ -45,6 +52,16 @@ const ResetPassword = () => {
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                type="password"
+                id="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 required
               />
             </div>

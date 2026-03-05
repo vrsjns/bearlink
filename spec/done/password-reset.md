@@ -104,6 +104,8 @@ Current state:
 - [x] `POST /forgot-password` without a body or with a malformed email returns 400.
 - [x] The reset-password page in the web-ui shows an error message when the backend
       returns 400.
+- [x] The reset-password page in the web-ui shows an error message when the two
+      password fields do not match, and does not submit the request to the backend.
 - [x] The analytics-service stores `password_reset_requested` and
       `password_reset_completed` events; it does not log a "Unknown event type" warning
       for either.
