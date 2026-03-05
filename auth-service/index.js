@@ -6,6 +6,7 @@ const { createLogger } = require('shared/utils/logger');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
 const { createEventPublisher, QUEUES } = require('shared/events');
 const { createApp } = require('./app');
+const { createOutboxPoller } = require('./services/outboxPoller');
 
 const logger = createLogger('auth-service');
 const prisma = new PrismaClient();
@@ -20,6 +21,13 @@ connectRabbitMQ()
 
     const eventPublisher = createEventPublisher(channel);
     const app = createApp({ prisma, eventPublisher });
+
+    const outboxPoller = createOutboxPoller({
+      prisma,
+      auditServiceUrl: process.env.AUDIT_SERVICE_URL,
+      logger,
+    });
+    outboxPoller.start();
 
     // Health check endpoints (need access to rabbitChannel)
     app.get('/health', healthHandler);
@@ -39,21 +47,22 @@ connectRabbitMQ()
       logger.info(`Auth service running on port ${process.env.PORT || 4000}`);
     });
 
-    process.on('SIGTERM', gracefulShutdown(server));
-    process.on('SIGINT', gracefulShutdown(server));
+    process.on('SIGTERM', gracefulShutdown(server, outboxPoller));
+    process.on('SIGINT', gracefulShutdown(server, outboxPoller));
   })
   .catch((error) => {
     logger.error('Error connecting to RabbitMQ', { error: error.message });
     process.exit(1);
   });
 
-const gracefulShutdown = (server) => async () => {
+const gracefulShutdown = (server, outboxPoller) => async () => {
   logger.info('Shutting down gracefully...');
+
+  await outboxPoller.stop();
 
   server.close(async () => {
     logger.info('Server closed.');
 
-    // Disconnect Prisma
     await prisma.$disconnect();
     logger.info('Prisma disconnected.');
 

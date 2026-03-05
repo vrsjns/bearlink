@@ -20,7 +20,8 @@ auth-service/
 +-- services/
 |   +-- token.service.js           # generateToken, sanitizeUser helpers
 |   +-- passwordReset.service.js   # generateResetToken, buildResetLink helpers
-|   \-- csrf.service.js            # CSRF token generation and verification
+|   +-- csrf.service.js            # CSRF token generation and verification
+|   \-- outboxPoller.js            # Background poller: forwards OutboxEvent rows to audit-service
 \-- CLAUDE.md
 ```
 
@@ -104,3 +105,19 @@ Uses `auth_service` PostgreSQL database with Prisma ORM.
 - `expiresAt` - Expiry timestamp (1 hour from creation)
 - `usedAt` - Set when the token is consumed; null if unused
 - `createdAt` - Creation timestamp
+
+### OutboxEvent Model
+
+- `id` - Primary key (autoincrement)
+- `eventType` - Event name (e.g. `user_registered`, `user_login`)
+- `payload` - JSON payload (event-specific fields; never includes passwords or tokens)
+- `actorId` - ID of the user who triggered the event (nullable)
+- `processed` - Whether the row has been forwarded to audit-service (default false)
+- `processedAt` - Timestamp when forwarding was confirmed (nullable)
+- `createdAt` - Creation timestamp
+
+## Outbox Pattern
+
+Every auditable action writes an `OutboxEvent` row atomically with its business record in a single `prisma.$transaction`. A background poller (`outboxPoller.js`) picks up unprocessed rows every 5 seconds and POSTs them to the audit-service internal endpoint (`AUDIT_SERVICE_URL/internal/audit-events`). Rows are marked `processed = true` only on a 2xx response; failures retry on the next cycle.
+
+Events covered: `user_registered`, `user_login`, `user_login_failed`, `user_password_changed`, `user_profile_updated`, `user_deleted`, `password_reset_requested`, `password_reset_completed`.

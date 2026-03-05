@@ -21,30 +21,21 @@ const setTokenCookie = (res, token) => {
   });
 };
 
-/**
- * Create auth controller with dependencies
- * @param {Object} deps - Dependencies
- * @param {Object} deps.prisma - Prisma client
- * @param {Object} deps.eventPublisher - Event publisher
- * @returns {Object} Controller methods
- */
 const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => {
   const { isLocked, recordFailedAttempt, clearAttempts } = loginAttemptStore;
+
   const register = async (req, res) => {
     const { email, password, name } = req.body;
 
-    // Validate required fields
     const { isValid, missing } = validateRequiredFields(req.body, ['email', 'password', 'name']);
     if (!isValid) {
       return validationError(res, 'Missing required fields', { missing });
     }
 
-    // Validate email format
     if (!isValidEmail(email)) {
       return validationError(res, 'Invalid email format');
     }
 
-    // Validate password strength
     if (!isValidPassword(password)) {
       return validationError(
         res,
@@ -54,9 +45,17 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
 
     const hashedPassword = await bcrypt.hash(password, 10);
     try {
-      const user = await prisma.user.create({
-        data: { email, password: hashedPassword, name },
-      });
+      const [user] = await prisma.$transaction([
+        prisma.user.create({
+          data: { email, password: hashedPassword, name },
+        }),
+        prisma.outboxEvent.create({
+          data: {
+            eventType: 'user_registered',
+            payload: { email },
+          },
+        }),
+      ]);
 
       logger.info('User registered', { email: user?.email, userId: user?.id });
 
@@ -87,10 +86,25 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user || !(await bcrypt.compare(password, user.password))) {
         recordFailedAttempt(email);
+        // Standalone outbox insert — no DB write to wrap
+        await prisma.outboxEvent.create({
+          data: {
+            eventType: 'user_login_failed',
+            payload: { email },
+          },
+        });
         return res.status(400).json({ error: 'Invalid email or password.' });
       }
 
       clearAttempts(email);
+      // Standalone outbox insert — no DB write to wrap
+      await prisma.outboxEvent.create({
+        data: {
+          eventType: 'user_login',
+          payload: { userId: user.id, email: user.email },
+          actorId: String(user.id),
+        },
+      });
       setTokenCookie(res, generateToken(user));
       res.json({ user: sanitizeUser(user) });
     } catch (error) {
@@ -124,11 +138,20 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
 
       if (user) {
         const token = generateResetToken();
-        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-        await prisma.passwordResetToken.create({
-          data: { token, userId: user.id, expiresAt },
-        });
+        await prisma.$transaction([
+          prisma.passwordResetToken.create({
+            data: { token, userId: user.id, expiresAt },
+          }),
+          prisma.outboxEvent.create({
+            data: {
+              eventType: 'password_reset_requested',
+              payload: { userId: user.id },
+              actorId: String(user.id),
+            },
+          }),
+        ]);
 
         eventPublisher.publishEmailNotification({
           to: email,
@@ -174,15 +197,23 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
 
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      await prisma.user.update({
-        where: { id: resetToken.userId },
-        data: { password: hashedPassword },
-      });
-
-      await prisma.passwordResetToken.update({
-        where: { id: resetToken.id },
-        data: { usedAt: new Date() },
-      });
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: resetToken.userId },
+          data: { password: hashedPassword },
+        }),
+        prisma.passwordResetToken.update({
+          where: { id: resetToken.id },
+          data: { usedAt: new Date() },
+        }),
+        prisma.outboxEvent.create({
+          data: {
+            eventType: 'password_reset_completed',
+            payload: { userId: resetToken.userId },
+            actorId: String(resetToken.userId),
+          },
+        }),
+      ]);
 
       eventPublisher.publishPasswordResetCompleted({ userId: resetToken.userId });
 

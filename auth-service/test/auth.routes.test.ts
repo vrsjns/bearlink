@@ -13,6 +13,7 @@ import {
   createMockPrismaClient,
   mockPrismaUser,
   mockPrismaPasswordResetToken,
+  mockPrismaOutboxEvent,
   resetPrismaMocks,
 } from './mocks/prisma';
 import { mockEventPublisher, resetRabbitMQMocks } from './mocks/rabbitmq';
@@ -128,6 +129,7 @@ describe('Auth Routes', () => {
         };
 
         mockPrismaUser.create.mockResolvedValue(createdUser);
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
 
         await request(app).post('/register').send(validRegistration).expect(200);
 
@@ -136,6 +138,29 @@ describe('Auth Routes', () => {
         expect(publishedUser.id).toBe(1);
         expect(publishedUser.email).toBe(validRegistration.email);
         expect(publishedUser).not.toHaveProperty('password');
+      });
+
+      it('should create an outbox event on successful registration', async () => {
+        const createdUser = {
+          id: 1,
+          email: validRegistration.email,
+          name: validRegistration.name,
+          password: 'hashedPassword',
+          role: 'user',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        mockPrismaUser.create.mockResolvedValue(createdUser);
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+        await request(app).post('/register').send(validRegistration).expect(200);
+
+        expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ eventType: 'user_registered' }),
+          })
+        );
       });
 
       it('should publish welcome email notification', async () => {
@@ -338,6 +363,7 @@ describe('Auth Routes', () => {
         };
 
         mockPrismaUser.findUnique.mockResolvedValue(existingUser);
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
 
         const response = await request(app).post('/login').send(validCredentials).expect(200);
 
@@ -393,9 +419,59 @@ describe('Auth Routes', () => {
       });
     });
 
+    describe('outbox events', () => {
+      it('should create a user_login outbox event on successful login', async () => {
+        const hashedPassword = await bcrypt.hash(validCredentials.password, 10);
+        mockPrismaUser.findUnique.mockResolvedValue({
+          id: 1,
+          email: validCredentials.email,
+          password: hashedPassword,
+          name: 'Test User',
+          role: 'user',
+        });
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+        await request(app).post('/login').send(validCredentials).expect(200);
+
+        expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ eventType: 'user_login' }),
+          })
+        );
+      });
+
+      it('should create a user_login_failed outbox event on wrong credentials', async () => {
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+        await request(app).post('/login').send(validCredentials).expect(400);
+
+        expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ eventType: 'user_login_failed' }),
+          })
+        );
+      });
+
+      it('should not create an outbox event when account is rate-limited', async () => {
+        mockPrismaUser.findUnique.mockResolvedValue(null);
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+        for (let i = 0; i < 5; i++) {
+          await request(app).post('/login').send(validCredentials).expect(400);
+        }
+        mockPrismaOutboxEvent.create.mockClear();
+
+        await request(app).post('/login').send(validCredentials).expect(429);
+
+        expect(mockPrismaOutboxEvent.create).not.toHaveBeenCalled();
+      });
+    });
+
     describe('authentication failures', () => {
       it('should return 400 when user does not exist', async () => {
         mockPrismaUser.findUnique.mockResolvedValue(null);
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
 
         const response = await request(app).post('/login').send(validCredentials).expect(400);
 
@@ -405,6 +481,7 @@ describe('Auth Routes', () => {
 
       it('should return 400 when password is incorrect', async () => {
         const hashedPassword = await bcrypt.hash('DifferentPassword1', 10);
+        mockPrismaOutboxEvent.create.mockResolvedValue({});
         mockPrismaUser.findUnique.mockResolvedValue({
           id: 1,
           email: validCredentials.email,
@@ -772,6 +849,7 @@ describe('Auth Routes', () => {
     it('should return 200 with generic message for a registered email', async () => {
       mockPrismaUser.findUnique.mockResolvedValue(registeredUser);
       mockPrismaPasswordResetToken.create.mockResolvedValue({});
+      mockPrismaOutboxEvent.create.mockResolvedValue({});
 
       const response = await request(app)
         .post('/forgot-password')
@@ -784,6 +862,7 @@ describe('Auth Routes', () => {
     it('should publish email notification and domain event for a registered email', async () => {
       mockPrismaUser.findUnique.mockResolvedValue(registeredUser);
       mockPrismaPasswordResetToken.create.mockResolvedValue({});
+      mockPrismaOutboxEvent.create.mockResolvedValue({});
 
       await request(app).post('/forgot-password').send({ email: 'user@example.com' }).expect(200);
 
@@ -794,6 +873,31 @@ describe('Auth Routes', () => {
 
       expect(mockEventPublisher.publishPasswordResetRequested).toHaveBeenCalledTimes(1);
       expect(mockEventPublisher.publishPasswordResetRequested).toHaveBeenCalledWith({ userId: 42 });
+    });
+
+    it('should create a password_reset_requested outbox event for a registered email', async () => {
+      mockPrismaUser.findUnique.mockResolvedValue(registeredUser);
+      mockPrismaPasswordResetToken.create.mockResolvedValue({});
+      mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+      await request(app).post('/forgot-password').send({ email: 'user@example.com' }).expect(200);
+
+      expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'password_reset_requested' }),
+        })
+      );
+    });
+
+    it('should not create an outbox event for an unregistered email', async () => {
+      mockPrismaUser.findUnique.mockResolvedValue(null);
+
+      await request(app)
+        .post('/forgot-password')
+        .send({ email: 'unknown@example.com' })
+        .expect(200);
+
+      expect(mockPrismaOutboxEvent.create).not.toHaveBeenCalled();
     });
 
     it('should return 200 with the same generic message for an unregistered email', async () => {
@@ -859,6 +963,7 @@ describe('Auth Routes', () => {
       mockPrismaPasswordResetToken.findUnique.mockResolvedValue(makeResetToken());
       mockPrismaUser.update.mockResolvedValue({});
       mockPrismaPasswordResetToken.update.mockResolvedValue({});
+      mockPrismaOutboxEvent.create.mockResolvedValue({});
 
       const response = await request(app)
         .post(`/reset-password/${validToken}`)
@@ -907,6 +1012,7 @@ describe('Auth Routes', () => {
       mockPrismaPasswordResetToken.findUnique.mockResolvedValue(makeResetToken());
       mockPrismaUser.update.mockResolvedValue({});
       mockPrismaPasswordResetToken.update.mockResolvedValue({});
+      mockPrismaOutboxEvent.create.mockResolvedValue({});
 
       await request(app)
         .post(`/reset-password/${validToken}`)
@@ -914,6 +1020,24 @@ describe('Auth Routes', () => {
         .expect(200);
 
       expect(mockEventPublisher.publishPasswordResetCompleted).toHaveBeenCalledWith({ userId: 42 });
+    });
+
+    it('should create a password_reset_completed outbox event', async () => {
+      mockPrismaPasswordResetToken.findUnique.mockResolvedValue(makeResetToken());
+      mockPrismaUser.update.mockResolvedValue({});
+      mockPrismaPasswordResetToken.update.mockResolvedValue({});
+      mockPrismaOutboxEvent.create.mockResolvedValue({});
+
+      await request(app)
+        .post(`/reset-password/${validToken}`)
+        .send({ password: 'NewPassword1' })
+        .expect(200);
+
+      expect(mockPrismaOutboxEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'password_reset_completed' }),
+        })
+      );
     });
 
     it('should return 400 for an expired token', async () => {
