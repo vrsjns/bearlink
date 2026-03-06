@@ -7,9 +7,18 @@ const { healthHandler, createReadinessHandler } = require('shared/utils/healthCh
 const { createEventPublisher, QUEUES } = require('shared/events');
 const { createApp } = require('./app');
 const { createOutboxPoller } = require('shared/utils/outboxPoller');
+const { createRedisLoginAttemptStore } = require('./services/redisLoginAttemptStore');
 
 const logger = createLogger('auth-service');
 const prisma = new PrismaClient();
+
+let loginAttemptStore;
+if (process.env.REDIS_URL) {
+  const Redis = require('ioredis');
+  const redisClient = new Redis(process.env.REDIS_URL);
+  loginAttemptStore = createRedisLoginAttemptStore(redisClient, logger);
+  logger.info('Using Redis-backed login attempt store');
+}
 
 let rabbitChannel = null;
 
@@ -20,7 +29,7 @@ connectRabbitMQ()
     channel.assertQueue(QUEUES.EMAIL_NOTIFICATIONS);
 
     const eventPublisher = createEventPublisher(channel);
-    const app = createApp({ prisma, eventPublisher });
+    const app = createApp({ prisma, eventPublisher, loginAttemptStore });
 
     const outboxPoller = createOutboxPoller({
       prisma,
