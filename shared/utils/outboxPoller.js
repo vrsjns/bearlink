@@ -2,7 +2,7 @@ const POLL_INTERVAL_MS = 5000;
 const BATCH_SIZE = 100;
 const REQUEST_TIMEOUT_MS = 10000;
 
-const createOutboxPoller = ({ prisma, auditServiceUrl, logger }) => {
+const createOutboxPoller = ({ prisma, auditServiceUrl, logger, sourceService }) => {
   let intervalId = null;
   let inFlight = null;
 
@@ -33,7 +33,7 @@ const createOutboxPoller = ({ prisma, auditServiceUrl, logger }) => {
             eventType: r.eventType,
             payload: r.payload,
             actorId: r.actorId,
-            sourceService: 'auth-service',
+            sourceService,
             createdAt: r.createdAt,
           }))
         ),

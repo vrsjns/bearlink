@@ -7,7 +7,7 @@ const { createLogger } = require('shared/utils/logger');
 const { healthHandler, createReadinessHandler } = require('shared/utils/healthCheck');
 const { createEventPublisher, QUEUES } = require('shared/events');
 const { createApp } = require('./app');
-const { createOutboxPoller } = require('./services/outboxPoller');
+const { createOutboxPoller } = require('shared/utils/outboxPoller');
 
 const logger = createLogger('url-service');
 const prisma = new PrismaClient();
@@ -78,6 +78,7 @@ connectRabbitMQ()
       prisma,
       auditServiceUrl: process.env.AUDIT_SERVICE_URL,
       logger,
+      sourceService: 'url-service',
     });
     outboxPoller.start();
 

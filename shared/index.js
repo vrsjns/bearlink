@@ -5,6 +5,7 @@ const healthCheck = require('./utils/healthCheck');
 const rateLimit = require('./middlewares/rateLimit');
 const cors = require('./middlewares/cors');
 const events = require('./events');
+const { createOutboxPoller } = require('./utils/outboxPoller');
 
 module.exports = {
   logger,
@@ -14,4 +15,5 @@ module.exports = {
   rateLimit,
   cors,
   events,
+  createOutboxPoller,
 };
