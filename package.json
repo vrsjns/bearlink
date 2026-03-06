@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": [
     "analytics-service",
+    "audit-service",
     "auth-service",
     "notification-service",
     "url-service",
