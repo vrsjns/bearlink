@@ -92,7 +92,7 @@ const ManageURLs = () => {
       const response = await getURLs(params as Parameters<typeof getURLs>[0]);
       const data = response.data;
       setUrls(data.data);
-      setTotal(data.total ?? 0);
+      setTotal(data.pagination?.total ?? 0);
       const tags = Array.from(
         new Set((data.data as URLItem[]).flatMap((u: URLItem) => u.tags ?? []))
       ) as string[];
