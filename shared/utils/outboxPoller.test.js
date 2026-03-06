@@ -172,6 +172,52 @@ describe('createOutboxPoller', () => {
     });
   });
 
+  describe('eventId namespacing', () => {
+    it('should prefix eventId with sourceService to avoid collisions across services', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+      vi.stubGlobal('fetch', mockFetch);
+      mockFindMany.mockResolvedValue(sampleRows);
+      mockUpdateMany.mockResolvedValue({ count: 2 });
+
+      const poller = createOutboxPoller({
+        prisma: mockPrisma,
+        auditServiceUrl: 'http://audit-service:9000',
+        logger: mockLogger,
+        sourceService: 'auth-service',
+      });
+
+      poller.start();
+      capturedCallback();
+      await poller.stop();
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body[0].eventId).toBe('auth-service:1');
+      expect(body[1].eventId).toBe('auth-service:2');
+    });
+
+    it('should use url-service prefix when sourceService is url-service', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+      vi.stubGlobal('fetch', mockFetch);
+      mockFindMany.mockResolvedValue(sampleRows);
+      mockUpdateMany.mockResolvedValue({ count: 2 });
+
+      const poller = createOutboxPoller({
+        prisma: mockPrisma,
+        auditServiceUrl: 'http://audit-service:9000',
+        logger: mockLogger,
+        sourceService: 'url-service',
+      });
+
+      poller.start();
+      capturedCallback();
+      await poller.stop();
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body[0].eventId).toBe('url-service:1');
+      expect(body[1].eventId).toBe('url-service:2');
+    });
+  });
+
   describe('sourceService forwarding', () => {
     it('should set sourceService: auth-service on every item in the POST body', async () => {
       const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });

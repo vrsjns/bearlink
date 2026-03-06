@@ -29,7 +29,7 @@ const createOutboxPoller = ({ prisma, auditServiceUrl, logger, sourceService }) 
         },
         body: JSON.stringify(
           rows.map((r) => ({
-            eventId: String(r.id),
+            eventId: `${sourceService}:${r.id}`,
             eventType: r.eventType,
             payload: r.payload,
             actorId: r.actorId,
