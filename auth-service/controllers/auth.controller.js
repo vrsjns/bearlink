@@ -77,7 +77,7 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
   const login = async (req, res) => {
     const { email, password } = req.body;
     try {
-      if (isLocked(email)) {
+      if (await isLocked(email)) {
         return res
           .status(429)
           .json({ error: 'Too many failed login attempts. Try again in 15 minutes.' });
@@ -85,7 +85,7 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
 
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user || !(await bcrypt.compare(password, user.password))) {
-        recordFailedAttempt(email);
+        await recordFailedAttempt(email);
         // Standalone outbox insert — no DB write to wrap
         await prisma.outboxEvent.create({
           data: {
@@ -96,7 +96,7 @@ const createAuthController = ({ prisma, eventPublisher, loginAttemptStore }) => 
         return res.status(400).json({ error: 'Invalid email or password.' });
       }
 
-      clearAttempts(email);
+      await clearAttempts(email);
       // Standalone outbox insert — no DB write to wrap
       await prisma.outboxEvent.create({
         data: {

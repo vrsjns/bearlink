@@ -26,6 +26,8 @@ services:
         condition: service_started
       mailhog:
         condition: service_started
+      redis:
+        condition: service_started
     env_file:
       - .env.secrets
     environment:
@@ -33,6 +35,7 @@ services:
       - RABBITMQ_URL=amqp://rabbitmq
       - FRONTEND_URL=http://localhost:3000
       - AUDIT_SERVICE_URL=http://audit-service:8500
+      - REDIS_URL=redis://redis:6379
 
   redis:
     image: redis:7-alpine
