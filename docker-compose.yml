@@ -32,6 +32,7 @@ services:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/auth_service
       - RABBITMQ_URL=amqp://rabbitmq
       - FRONTEND_URL=http://localhost:3000
+      - AUDIT_SERVICE_URL=http://audit-service:8500
 
   redis:
     image: redis:7-alpine
@@ -63,6 +64,7 @@ services:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/url_service
       - RABBITMQ_URL=amqp://rabbitmq
       - REDIS_URL=redis://redis:6379
+      - AUDIT_SERVICE_URL=http://audit-service:8500
 
   preview-service:
     build:
