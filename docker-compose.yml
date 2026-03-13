@@ -13,9 +13,9 @@ services:
     <<: *current-user
     build:
       context: ./
-      dockerfile: ./auth-service/Dockerfile
+      dockerfile: ./services/auth/Dockerfile
     volumes:
-      - ./auth-service:/app/auth-service
+      - ./services/auth:/app/services/auth
       - /app/node_modules # Avoid overwriting node_modules inside the container
     ports:
       - '4000:4000'
@@ -47,10 +47,10 @@ services:
     <<: *current-user
     build:
       context: ./
-      dockerfile: ./url-service/Dockerfile
+      dockerfile: ./services/url/Dockerfile
     volumes:
-      - ./shared:/app/shared
-      - ./url-service:/app/url-service
+      - ./services/shared:/app/services/shared
+      - ./services/url:/app/services/url
       - /app/node_modules
     ports:
       - '5000:5000'
@@ -71,7 +71,7 @@ services:
 
   preview-service:
     build:
-      context: ./preview-service
+      context: ./services/preview
       dockerfile: Dockerfile
     ports:
       - '8000:8000'
@@ -87,10 +87,10 @@ services:
     <<: *current-user
     build:
       context: ./
-      dockerfile: ./analytics-service/Dockerfile
+      dockerfile: ./services/analytics/Dockerfile
     volumes:
-      - ./shared:/app/shared
-      - ./analytics-service:/app/analytics-service
+      - ./services/shared:/app/services/shared
+      - ./services/analytics:/app/services/analytics
       - /app/node_modules
     ports:
       - '6000:6000'
@@ -109,10 +109,10 @@ services:
     <<: *current-user
     build:
       context: ./
-      dockerfile: ./notification-service/Dockerfile
+      dockerfile: ./services/notification/Dockerfile
     volumes:
-      - ./shared:/app/shared
-      - ./notification-service:/app/notification-service
+      - ./services/shared:/app/services/shared
+      - ./services/notification:/app/services/notification
       - /app/node_modules
     ports:
       - '7000:7000'
@@ -131,9 +131,9 @@ services:
 
   web-ui:
     <<: *current-user
-    build: ./web-ui
+    build: ./frontend/web-ui
     volumes:
-      - ./web-ui:/app
+      - ./frontend/web-ui:/app
       - /app/node_modules
     ports:
       - '3000:3000'
@@ -155,10 +155,10 @@ services:
     <<: *current-user
     build:
       context: ./
-      dockerfile: ./audit-service/Dockerfile
+      dockerfile: ./services/audit/Dockerfile
     volumes:
-      - ./shared:/app/shared
-      - ./audit-service:/app/audit-service
+      - ./services/shared:/app/services/shared
+      - ./services/audit:/app/services/audit
       - /app/node_modules
     ports:
       - '8500:8500'

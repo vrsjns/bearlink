@@ -18,13 +18,13 @@ RUN npm install
 RUN npm install -g nodemon
 
 # Navigate to the specific service
-WORKDIR /app/analytics-service
+WORKDIR /app/services/auth
 
 # Generate Prisma client using workspace-installed version
 RUN npm exec -- prisma generate
 
 # Expose the port on which the service runs
-EXPOSE 6000
+EXPOSE 4000
 
 # Start the application with nodemon for auto-reloading
 CMD ["sh", "/app/tools/wait-for-postgres.sh"]

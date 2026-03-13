@@ -25,10 +25,10 @@ npm run test                # Run tests in all workspaces
 
 ### Individual Services
 
-Backend services (auth-service, url-service, analytics-service, notification-service):
+Backend services (services/auth, services/url, services/analytics, services/notification):
 
 ```bash
-cd <service-name>
+cd services/<name>
 npm run start               # Start with nodemon (auto-reload)
 npm run test                # Run tests
 npx prisma migrate dev      # Run database migrations
@@ -37,7 +37,7 @@ npx prisma migrate dev      # Run database migrations
 Frontend (web-ui):
 
 ```bash
-cd web-ui
+cd frontend/web-ui
 npm run dev                 # Next.js dev server
 npm run build               # Production build
 npm run lint                # ESLint
@@ -46,7 +46,7 @@ npm run lint                # ESLint
 Preview service (Python):
 
 ```bash
-cd preview-service
+cd services/preview
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 pytest                      # Run tests
@@ -65,15 +65,15 @@ kubectl get pods -n bearlink
 
 ### Services
 
-| Service              | Port | Database          | Purpose                                                            |
-| -------------------- | ---- | ----------------- | ------------------------------------------------------------------ |
-| auth-service         | 4000 | auth_service      | User registration, login, JWT authentication                       |
-| url-service          | 5000 | url_service       | URL shortening, redirection, click tracking                        |
-| analytics-service    | 6000 | analytics_service | Authenticated event storage, aggregation, and query                |
-| notification-service | 7000 | -                 | Email delivery via SMTP                                            |
-| preview-service      | 8000 | -                 | Link metadata scraping (Python/FastAPI/BeautifulSoup)              |
-| audit-service        | 8500 | audit_service     | Append-only audit log; receives outbox events from source services |
-| web-ui               | 3000 | -                 | Next.js frontend                                                   |
+| Service              | Path                  | Port | Database          | Purpose                                                            |
+| -------------------- | --------------------- | ---- | ----------------- | ------------------------------------------------------------------ |
+| auth-service         | services/auth         | 4000 | auth_service      | User registration, login, JWT authentication                       |
+| url-service          | services/url          | 5000 | url_service       | URL shortening, redirection, click tracking                        |
+| analytics-service    | services/analytics    | 6000 | analytics_service | Authenticated event storage, aggregation, and query                |
+| notification-service | services/notification | 7000 | -                 | Email delivery via SMTP                                            |
+| preview-service      | services/preview      | 8000 | -                 | Link metadata scraping (Python/FastAPI/BeautifulSoup)              |
+| audit-service        | services/audit        | 8500 | audit_service     | Append-only audit log; receives outbox events from source services |
+| web-ui               | frontend/web-ui       | 3000 | -                 | Next.js frontend                                                   |
 
 Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (1025/8025)
 
@@ -84,7 +84,7 @@ Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (10
 - `preview_jobs` - url-service → preview-service (trigger async metadata scrape)
 - `preview_results` - preview-service → url-service (scraped metadata result)
 
-### Shared Code (`/shared`)
+### Shared Code (`services/shared/`)
 
 - `utils/logger.js` - Winston logger (console + file)
 - `utils/rabbitmq.js` - RabbitMQ connection with retry logic
@@ -93,7 +93,7 @@ Supporting infrastructure: PostgreSQL (5432), RabbitMQ (5672/15672), MailHog (10
 
 ### Event-Driven Communication
 
-Services communicate via RabbitMQ using the shared events module (`shared/events/`).
+Services communicate via RabbitMQ using the shared events module (`services/shared/events/`).
 
 | Service              | Role      | Events                                                                                            |
 | -------------------- | --------- | ------------------------------------------------------------------------------------------------- |

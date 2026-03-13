@@ -29,19 +29,19 @@ jobs:
         with:
           filters: |
             auth-service:
-              - 'auth-service/**'
+              - 'services/auth/**'
             url-service:
-              - 'url-service/**'
+              - 'services/url/**'
             analytics-service:
-              - 'analytics-service/**'
+              - 'services/analytics/**'
             notification-service:
-              - 'notification-service/**'
+              - 'services/notification/**'
             web-ui:
-              - 'web-ui/**'
+              - 'frontend/web-ui/**'
             preview-service:
-              - 'preview-service/**'
+              - 'services/preview/**'
             shared:
-              - 'shared/**'
+              - 'services/shared/**'
               - 'tools/**'
               - 'package.json'
               - 'lerna.json'
@@ -60,12 +60,12 @@ jobs:
           GITHUB_EVENT: ${{ github.event_name }}
         run: |
           declare -a ALL_SERVICES=(
-            "auth-service|.|auth-service/Dockerfile"
-            "url-service|.|url-service/Dockerfile"
-            "analytics-service|.|analytics-service/Dockerfile"
-            "notification-service|.|notification-service/Dockerfile"
-            "web-ui|.|web-ui/Dockerfile"
-            "preview-service|preview-service|preview-service/Dockerfile"
+            "auth-service|.|services/auth/Dockerfile"
+            "url-service|.|services/url/Dockerfile"
+            "analytics-service|.|services/analytics/Dockerfile"
+            "notification-service|.|services/notification/Dockerfile"
+            "web-ui|.|frontend/web-ui/Dockerfile"
+            "preview-service|services/preview|services/preview/Dockerfile"
           )
 
           declare -A USES_SHARED=(

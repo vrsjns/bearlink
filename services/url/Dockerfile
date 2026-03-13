@@ -18,7 +18,7 @@ RUN npm install
 RUN npm install -g nodemon
 
 # Navigate to the specific service
-WORKDIR /app/url-service
+WORKDIR /app/services/url
 
 # Generate Prisma client using workspace-installed version
 RUN npm exec -- prisma generate

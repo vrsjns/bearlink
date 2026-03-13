@@ -52,4 +52,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install ruff
-      - run: ruff check preview-service/
+      - run: ruff check services/preview/

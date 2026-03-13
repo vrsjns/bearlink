@@ -11,7 +11,7 @@ RUN npm install
 
 RUN npm install -g nodemon
 
-WORKDIR /app/audit-service
+WORKDIR /app/services/audit
 
 RUN npm exec -- prisma generate
 

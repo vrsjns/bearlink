@@ -1,10 +1,10 @@
 import { defineWorkspace } from 'vitest/config';
 
 export default defineWorkspace([
-  'auth-service',
-  'url-service',
-  'analytics-service',
-  'notification-service',
-  'shared',
-  'web-ui',
+  'services/auth',
+  'services/url',
+  'services/analytics',
+  'services/notification',
+  'services/shared',
+  'frontend/web-ui',
 ]);
