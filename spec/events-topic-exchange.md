@@ -1,6 +1,6 @@
 # Events Topic Exchange
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** shared, analytics-service, auth-service, url-service, billing-service
 > **Priority:** high
 

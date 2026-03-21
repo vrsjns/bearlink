@@ -1,6 +1,6 @@
 # Billing UI
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** web-ui
 > **Priority:** medium
 

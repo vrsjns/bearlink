@@ -1,6 +1,6 @@
 # Plan Enforcement
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** url-service, analytics-service, shared
 > **Priority:** high
 

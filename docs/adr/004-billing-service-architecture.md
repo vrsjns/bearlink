@@ -1,6 +1,6 @@
 # ADR-004: Billing-service architecture and plan enforcement strategy
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-03-19
 - **Affects:** billing-service (new), auth-service, url-service, analytics-service, shared
 - **Specs:** `spec/plan-model.md`, `spec/plan-enforcement.md`, `spec/stripe-integration.md`,

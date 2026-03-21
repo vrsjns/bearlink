@@ -1,6 +1,6 @@
 # Plan Model and Billing Service
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** billing-service (new), auth-service, shared
 > **Priority:** high
 

@@ -1,6 +1,6 @@
 # Stripe Integration
 
-> **Status:** draft
+> **Status:** approved
 > **Service(s):** billing-service
 > **Priority:** high
 
